@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "PrelabelAPI.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "PrelabelAPI.py"
+    }
+  ]
+}
