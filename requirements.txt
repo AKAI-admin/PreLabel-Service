@@ -7,4 +7,4 @@ numpy
 requests
 python-dotenv
 gunicorn
-tensorflow==2.18.0
+tensorflow
