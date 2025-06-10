@@ -4,7 +4,7 @@ services:
     env: python
     plan: free # Or your desired plan, e.g., starter
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn -w 4 -k uvicorn.workers.UvicornWorker PrelabelAPI:app --bind 0.0.0.0:$PORT"
+    startCommand: "gunicorn -w 4 -k uvicorn.workers.UvicornWorker PrelabelAPI:app --bind 0.0.0.0:10000"
     healthCheckPath: /docs # or another path that should be healthy
     envVars:
       - key: MONGODB_URL
