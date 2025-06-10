@@ -12,7 +12,7 @@ from transnetv2 import TransNetV2
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv('config.env')
+# load_dotenv('config.env')
 
 app = FastAPI()
 
