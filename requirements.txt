@@ -2,9 +2,11 @@ fastapi
 uvicorn
 pydantic
 pymongo
-opencv-python
+opencv-python-headless
 numpy
 requests
 python-dotenv
 gunicorn
 tensorflow
+ffmpeg-python
+Pillow
