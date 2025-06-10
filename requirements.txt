@@ -1,8 +1,10 @@
 fastapi
-uvicorn[standard]
+uvicorn
 pydantic
 pymongo
 opencv-python
 numpy
 requests
-python-dotenv 
+python-dotenv
+gunicorn
+transnetv2 

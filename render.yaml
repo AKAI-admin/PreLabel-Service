@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: prelabel-api
+    env: python
+    plan: free # Or your desired plan, e.g., starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -w 4 -k uvicorn.workers.UvicornWorker PrelabelAPI:app --bind 0.0.0.0:$PORT"
+    healthCheckPath: /docs # or another path that should be healthy
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TRANSNET_MODEL_DIR
+        value: /var/data/transnetv2
+    disk:
+      name: transnet-weights
+      mountPath: /var/data/transnetv2
+      sizeGB: 1
