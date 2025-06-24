@@ -22,9 +22,9 @@ class PrelabelRequest(BaseModel):
     project_id: str
 
 # MongoDB connection
-MONGODB_URL = os.getenv('MONGODB_URL')
+MONGODB_URL = os.getenv('MONGO_URI')
 if not MONGODB_URL:
-    raise ValueError("MONGODB_URL environment variable is not set")
+    raise ValueError("MONGO_URI environment variable is not set")
 
 client = MongoClient(MONGODB_URL)
 db = client["AkaiDb0"]
