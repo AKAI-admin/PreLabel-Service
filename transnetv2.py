@@ -4,7 +4,7 @@ import tensorflow as tf
 
 
 class TransNetV2:
-
+    
     def __init__(self, model_dir=None):
         if model_dir is None:
             model_dir = os.path.join(os.path.dirname(__file__), "transnetv2-weights/")
@@ -13,7 +13,7 @@ class TransNetV2:
             else:
                 print(f"[TransNetV2] Using weights from {model_dir}.")
 
-        self._input_size = (27, 48, 3)
+        self._input_size = (27, 48, 3)  #27 frames , each 48px , 3 color rgb
         try:
             self._model = tf.saved_model.load(model_dir)
             # print(f'model_dir : {model_dir}')
