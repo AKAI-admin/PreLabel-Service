@@ -4,8 +4,10 @@ from pymongo import MongoClient
 from bson import ObjectId
 import os
 import json
+import requests
 from dotenv import load_dotenv
 from video_description_generator import VideoDescriptionGenerator
+from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
 
 # Load environment variables
 load_dotenv('config.env')
@@ -16,6 +18,9 @@ app = FastAPI()
 class PrelabelRequest(BaseModel):
     task_id: str
     project_id: str
+
+class InstructionRequest(BaseModel):
+    instructions: str 
 
 # MongoDB connection
 MONGODB_URL = os.getenv('MONGO_URI')
@@ -35,6 +40,55 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is not set")
 
 generator = VideoDescriptionGenerator(TRANSNET_MODEL_DIR, OPENAI_API_KEY)
+
+
+@app.post("/process-instructions")
+async def process_instructions(request: InstructionRequest):
+    print("Received instructions:", request.instructions)
+    
+    try:
+        # Create a prompt that includes the user's instructions
+        prompt = f"""You are an AI assistant helping to process video labeling instructions.
+
+The user has provided the following instructions for their video labeling project:
+
+Instructions: {request.instructions}
+
+Please analyze these instructions and provide guidance on how to implement them effectively for video data labeling. create and answer example question like prompt structure below:
+{VIDEO_ANALYSIS_PROMPT}
+
+Provide a structured response that can help guide the video labeling process."""
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 1000,
+                "temperature": 0.7
+            }
+        )
+        
+        if response.status_code == 200:
+            openai_response = response.json()['choices'][0]['message']['content']
+            return openai_response
+        else:
+            print(f"OpenAI API error: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {response.status_code}")
+            
+    except Exception as e:
+        print(f"Error processing instructions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing instructions: {str(e)}")
+
 
 @app.post("/prelabel")
 async def prelabel_videos(request: PrelabelRequest, background_tasks: BackgroundTasks):
@@ -66,6 +120,8 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     # Schedule processing in the background
     background_tasks.add_task(process_datapoints, datapoints)
     return {"message": "Prelabeling started in the background"}
+
+
 
 def process_datapoints(datapoints):
     """Process datapoints and update their preLabel field in the database."""
