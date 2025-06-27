@@ -45,26 +45,7 @@ class VideoDescriptionGenerator:
             # Use custom prompt if provided, otherwise use default
             if custom_prompt:
                 print(f"Using custom prompt")
-                # Ensure custom prompt includes JSON output requirement
-                prompt_to_use = f"""{custom_prompt}
-
-IMPORTANT: Your response must be in JSON format only. Do not include any explanations, markdown, or additional text. 
-Output ONLY raw JSON (no markdown, no ```json blocks, no extra text) with this exact structure:
-
-{{
-    "questions": [
-        {{"q": "question text", "a": "answer text"}},
-        {{"q": "question text", "a": "answer text"}},
-        {{"q": "question text", "a": "answer text"}},
-        {{"q": "question text", "a": "answer text"}},
-        {{"q": "question text", "a": "answer text"}}
-    ],
-    "keywords": ["keyword1", "keyword2", "keyword3"],
-    "map_placement": "Town", 
-    "summary": "detailed description of the video"
-}}
-
-The response must begin with {{ and end with }}. Generate exactly 5 questions and provide relevant keywords, map_placement and a detailed summary."""
+                prompt_to_use = custom_prompt
             else:
                 print(f"Using default prompt")
                 prompt_to_use = VIDEO_ANALYSIS_PROMPT
