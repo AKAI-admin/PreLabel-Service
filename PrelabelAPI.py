@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks , Body
 from pydantic import BaseModel
 from pymongo import MongoClient
 from bson import ObjectId
 import os
 import json
+import yaml
 import requests
 from dotenv import load_dotenv
 from video_description_generator import VideoDescriptionGenerator
@@ -43,21 +44,53 @@ generator = VideoDescriptionGenerator(TRANSNET_MODEL_DIR, OPENAI_API_KEY)
 
 
 @app.post("/process-instructions")
-async def process_instructions(request: InstructionRequest):
-    print("Received instructions:", request.instructions)
+async def process_instructions(instructions_yaml: str = Body(..., media_type="application/x-yaml")):
     
     try:
+        instructions_data = yaml.safe_load(instructions_yaml)
+
+        instructions = instructions_data.get("instructions", "")
+        if not instructions:
+            raise HTTPException(status_code=400, detail="Missing 'instructions' field in YAML.")
+
         # Create a prompt that includes the user's instructions
-        prompt = f"""You are an AI assistant helping to process video labeling instructions.
+        prompt = f"""You are an AI assistant tasked with modifying a default prompt for analyzing video keyframes based on a user-provided paragraph that contains details about the dataset, special labeling instructions, and objects to focus on. Your goal is to update the default aspects list and example questions to align with the specific requirements of the dataset, ensuring high-quality labeling output.
+Here is the default prompt you will modify:
+kindly make sure to keep the same format as the default prompt given in string not any type of json: {VIDEO_ANALYSIS_PROMPT}
 
-The user has provided the following instructions for their video labeling project:
-
-Instructions: {request.instructions}
-
-Please analyze these instructions and provide guidance on how to implement them effectively for video data labeling. create and answer example question like prompt structure below:
-{VIDEO_ANALYSIS_PROMPT}
-
-Provide a structured response that can help guide the video labeling process."""
+Instructions for Modification:
+When you receive the user's paragraph, follow these steps:
+Analyze the Paragraph: Carefully read the user-provided paragraph to identify key details about the dataset, special labeling instructions, and objects or elements to focus on. Conduct a deep analysis to understand the context and specific requirements.
+Update the Aspects List:
+Start with the default aspects list provided above.
+Keep aspects that remain relevant to the dataset described in the paragraph.
+Modify existing aspects if the paragraph suggests a different focus or specificity (e.g., changing "Number of participants" to "Number of vehicles" for a traffic dataset).
+Remove aspects that are irrelevant based on the paragraph.
+Add new aspects if the paragraph highlights unique elements not covered in the default list (e.g., "Types of animals" for a wildlife dataset).
+Generate Example Questions:
+Based on the updated aspects list, create 5 new example questions that reflect the specific dataset and instructions from the paragraph.
+Ensure each question combines an aspect with a potential answer, tailored to the context (e.g., "What types of vehicles are present and what are their actions?" for a traffic dataset).
+The questions should cover the most critical aspects identified in the paragraph.
+Preserve Output Structure:
+The modified prompt will be used to analyze keyframes and produce a JSON output with the following structure:
+"questions": List of 5 question-answer pairs.
+"keywords": List of relevant keywords.
+"map_placement": Selected option (Town, Village, Water body, Mountains, Snow, Road).
+"summary": Detailed description of the video.
+Output the Modified Prompt:
+Your response should be the full text of the modified prompt, incorporating the updated aspects list and example questions.
+Maintain the structure of the default prompt, adjusting only the aspects list and example questions based on the paragraph.
+Do not analyze keyframes or produce the JSON output here—your task is to generate the modified prompt text that can later be used for keyframe analysis.
+Response Format:
+Provide the modified prompt as plain text, starting with "You are an AI assistant..." and including the updated aspects list and example questions.
+Do not include the JSON output or keyframe analysis in your response—only the modified prompt text.
+Example Workflow:
+If the user's paragraph is: "This dataset consists of videos from urban traffic cameras. Focus on identifying types of vehicles, traffic flow, and any incidents."
+Update aspects to include "Types of vehicles," "Traffic flow," "Incidents," while keeping relevant defaults like "Location" and "Timing."
+Remove irrelevant aspects like "Emotions/Expressions."
+Generate example questions like "What types of vehicles are visible and how are they moving?" and "Is there any incident affecting the traffic flow?"
+Paragraph Input :  {instructions}
+"""
         
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
