@@ -9,6 +9,7 @@ import requests
 from dotenv import load_dotenv
 from video_description_generator import VideoDescriptionGenerator
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
+from fastapi.responses import PlainTextResponse
 
 # Load environment variables
 load_dotenv('config.env')
@@ -43,17 +44,11 @@ if not OPENAI_API_KEY:
 generator = VideoDescriptionGenerator(TRANSNET_MODEL_DIR, OPENAI_API_KEY)
 
 
-@app.post("/process-instructions")
-async def process_instructions(instructions_yaml: str = Body(..., media_type="application/x-yaml")):
+@app.post("/process-instructions", response_class=PlainTextResponse)
+async def process_instructions(instructions: str = Body(..., media_type="text/plain")):
     
     try:
-        instructions_data = yaml.safe_load(instructions_yaml)
-
-        instructions = instructions_data.get("instructions", "")
-        if not instructions:
-            raise HTTPException(status_code=400, detail="Missing 'instructions' field in YAML.")
-
-        # Create a prompt that includes the user's instructions
+        # Use instructions directly instead of parsing JSON
         prompt = f"""You are an AI assistant tasked with modifying a default prompt for analyzing video keyframes based on a user-provided paragraph that contains details about the dataset, special labeling instructions, and objects to focus on. Your goal is to update the default aspects list and example questions to align with the specific requirements of the dataset, ensuring high-quality labeling output.
 Here is the default prompt you will modify:
 kindly make sure to keep the same format as the default prompt given in string not any type of json: {VIDEO_ANALYSIS_PROMPT}
@@ -89,7 +84,7 @@ If the user's paragraph is: "This dataset consists of videos from urban traffic 
 Update aspects to include "Types of vehicles," "Traffic flow," "Incidents," while keeping relevant defaults like "Location" and "Timing."
 Remove irrelevant aspects like "Emotions/Expressions."
 Generate example questions like "What types of vehicles are visible and how are they moving?" and "Is there any incident affecting the traffic flow?"
-Paragraph Input :  {instructions}
+Paragraph Input: {instructions}
 """
         
         response = requests.post(
@@ -113,7 +108,9 @@ Paragraph Input :  {instructions}
         
         if response.status_code == 200:
             openai_response = response.json()['choices'][0]['message']['content']
-            return openai_response
+            # Replace escaped newlines with actual newlines for clean formatting
+            clean_response = openai_response.replace('\\n', '\n')
+            return PlainTextResponse(content=clean_response)
         else:
             print(f"OpenAI API error: {response.status_code} - {response.text}")
             raise HTTPException(status_code=500, detail=f"OpenAI API error: {response.status_code}")
