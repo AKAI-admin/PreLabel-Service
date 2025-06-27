@@ -43,15 +43,41 @@ class VideoDescriptionGenerator:
         """Generate a description for a set of keyframes using the gpt-4o-mini API."""
         try:
             # Use custom prompt if provided, otherwise use default
-            prompt_to_use = custom_prompt if custom_prompt else VIDEO_ANALYSIS_PROMPT
+            if custom_prompt:
+                print(f"Using custom prompt")
+                # Ensure custom prompt includes JSON output requirement
+                prompt_to_use = f"""{custom_prompt}
+
+IMPORTANT: Your response must be in JSON format only. Do not include any explanations, markdown, or additional text. 
+Output ONLY raw JSON (no markdown, no ```json blocks, no extra text) with this exact structure:
+
+{{
+    "questions": [
+        {{"q": "question text", "a": "answer text"}},
+        {{"q": "question text", "a": "answer text"}},
+        {{"q": "question text", "a": "answer text"}},
+        {{"q": "question text", "a": "answer text"}},
+        {{"q": "question text", "a": "answer text"}}
+    ],
+    "keywords": ["keyword1", "keyword2", "keyword3"],
+    "map_placement": "Town", 
+    "summary": "detailed description of the video"
+}}
+
+The response must begin with {{ and end with }}. Generate exactly 5 questions and provide relevant keywords, map_placement and a detailed summary."""
+            else:
+                print(f"Using default prompt")
+                prompt_to_use = VIDEO_ANALYSIS_PROMPT
             
             # Convert keyframes to base64
             image_contents = []
-            for keyframe in keyframes:
+            for i, keyframe in enumerate(keyframes):
                 _, buffer = cv2.imencode('.jpg', keyframe)
                 img_str = base64.b64encode(buffer.tobytes()).decode('utf-8')
                 image_contents.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}})
+                print(f"Encoded keyframe {i+1}/{len(keyframes)}")
 
+            print("Making API request to OpenAI...")
             # Construct the API request
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -71,8 +97,11 @@ class VideoDescriptionGenerator:
                     ]
                 }
             )
+            print(f"API response status: {response.status_code}")
             if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
+                result = response.json()['choices'][0]['message']['content']
+                print(f"Successfully got response from OpenAI: {result[:100]}...")
+                return result
             else:
                 print(f"API error: {response.status_code} - {response.text}")
                 return None
@@ -84,10 +113,16 @@ class VideoDescriptionGenerator:
         """Process a batch of videos, extracting keyframes and generating one description per video."""
         results = {}
         for video_path in video_paths:
+            print(f"Processing video: {video_path}")
             keyframes = self.extract_keyframes(video_path)
             if keyframes is None:
+                print(f"Failed to extract keyframes from {video_path}")
                 continue
+            print(f"Extracted {len(keyframes)} keyframes from {video_path}")
             description = self.generate_description(keyframes, custom_prompt)
             if description:
                 results[video_path] = description
+                print(f"Successfully generated description for {video_path}")
+            else:
+                print(f"Failed to generate description for {video_path}")
         return results
