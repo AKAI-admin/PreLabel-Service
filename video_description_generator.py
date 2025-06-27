@@ -39,9 +39,12 @@ class VideoDescriptionGenerator:
             print(f"Error processing {video_path}: {e}")
             return None
 
-    def generate_description(self, keyframes):
+    def generate_description(self, keyframes, custom_prompt=None):
         """Generate a description for a set of keyframes using the gpt-4o-mini API."""
         try:
+            # Use custom prompt if provided, otherwise use default
+            prompt_to_use = custom_prompt if custom_prompt else VIDEO_ANALYSIS_PROMPT
+            
             # Convert keyframes to base64
             image_contents = []
             for keyframe in keyframes:
@@ -62,7 +65,7 @@ class VideoDescriptionGenerator:
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": VIDEO_ANALYSIS_PROMPT}
+                                {"type": "text", "text": prompt_to_use}
                             ] + image_contents
                         }
                     ]
@@ -77,14 +80,14 @@ class VideoDescriptionGenerator:
             print(f"Error generating description: {e}")
             return None
 
-    def process_videos(self, video_paths):
+    def process_videos(self, video_paths, custom_prompt=None):
         """Process a batch of videos, extracting keyframes and generating one description per video."""
         results = {}
         for video_path in video_paths:
             keyframes = self.extract_keyframes(video_path)
             if keyframes is None:
                 continue
-            description = self.generate_description(keyframes)
+            description = self.generate_description(keyframes, custom_prompt)
             if description:
                 results[video_path] = description
         return results

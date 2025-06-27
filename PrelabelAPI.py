@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 from video_description_generator import VideoDescriptionGenerator
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
 from fastapi.responses import PlainTextResponse
+import datetime
+from datetime import timedelta
+
 
 # Load environment variables
 load_dotenv('config.env')
@@ -20,6 +23,7 @@ app = FastAPI()
 class PrelabelRequest(BaseModel):
     task_id: str
     project_id: str
+    user_id: str
 
 class InstructionRequest(BaseModel):
     instructions: str 
@@ -32,6 +36,7 @@ if not MONGODB_URL:
 client = MongoClient(MONGODB_URL)
 db = client["AkaiDb0"]
 datapoints_collection = db["datapoints"]
+users_collection = db["users"]
 
 
 # Initialize the generator
@@ -126,6 +131,7 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     try:
         task_id = ObjectId(request.task_id)
         project_id = ObjectId(request.project_id)
+        user_id = ObjectId(request.user_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid task_id or project_id")
 
@@ -140,6 +146,22 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     if not datapoints:
         raise HTTPException(status_code=404, detail="No datapoints found with 'created' status for the given task_id and project_id")
 
+    # Fetch custom prompt from users collection if available
+    custom_prompt = None
+    try:
+        # Find user document where one of the projects has _id == project_id
+        user = users_collection.find_one({"projects._id": project_id})
+        
+        if user and "projects" in user:
+            for project in user["projects"]:
+                if project.get("_id") == project_id:
+                    # Get PreLabelPrompt if it exists inside instruction
+                    custom_prompt = project.get("instruction", {}).get("PreLabelPrompt")
+                    break
+                    
+    except Exception as e:
+        print(f"Error fetching custom prompt: {e}")
+
     # Update status to "pre-label" for all selected datapoints
     datapoint_ids = [dp["_id"] for dp in datapoints]
     datapoints_collection.update_many(
@@ -148,18 +170,61 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     )
 
     # Schedule processing in the background
-    background_tasks.add_task(process_datapoints, datapoints)
+    background_tasks.add_task(process_datapoints, datapoints, custom_prompt , user_id=user_id)
     return {"message": "Prelabeling started in the background"}
 
+def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
+    try:
+        user = users_collection.find_one({"_id": user_id})
+        projects = user.get("projects", [])
+        
+        for idx, ds in enumerate(projects):
+            if ds["_id"] == project_id:
+                project = ds
+                break
+        else:
+            print("Project not found in user's projects.")
+            return
+        
+        current_time = datetime.utcnow()
+        interval = timedelta(hours=12)
+        window_end_time = project["preLabelWindow"]
 
+        time_difference = current_time - window_end_time
+        interval_count = int(time_difference.total_seconds() // interval.total_seconds())
+        interval_count = max(0, interval_count)
 
-def process_datapoints(datapoints):
+        if "preLabelList" not in project:
+            project["preLabelList"] = []
+
+        if time_difference.total_seconds() < 0:
+            # Within window
+            if not project["preLabelList"]:
+                project["preLabelList"].append(1)
+            else:
+                project["preLabelList"][-1] += 1
+        else:
+            # Outside window
+            project["preLabelList"].extend([0] * interval_count)
+            project["preLabelList"].append(1)
+            project["preLabelWindow"] = window_end_time + (interval * (interval_count + 1))
+
+        # Update project in list
+        projects[idx] = project
+
+        # Update back in DB
+        users_collection.update_one({"_id": user_id}, {"$set": {"projects": projects}})
+
+    except Exception as e:
+        print("Error in update_pre_label_list:", str(e))
+
+def process_datapoints(datapoints, custom_prompt=None , user_id=None):
     """Process datapoints and update their preLabel field in the database."""
     for datapoint in datapoints:
         video_path = datapoint["mediaUrl"]
         try:
-            # Process video and get description
-            results = generator.process_videos([video_path])
+            # Process video and get description using custom prompt if available
+            results = generator.process_videos([video_path], custom_prompt)
             description = results.get(video_path)
             if description:
                 try:
@@ -188,6 +253,7 @@ def process_datapoints(datapoints):
                             }
                         }
                     )
+                    update_pre_label_list(user_id,datapoint["project_id"])
                 except json.JSONDecodeError:
                     print(f"Failed to parse description for {video_path}")
                     # Update status back to created if processing failed
