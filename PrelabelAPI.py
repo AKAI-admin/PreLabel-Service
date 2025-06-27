@@ -1,15 +1,15 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks , Body
 from pydantic import BaseModel
 from pymongo import MongoClient
 from bson import ObjectId
 import os
 import json
-import cv2
-import numpy as np
+import yaml
 import requests
-import base64
-from transnetv2 import TransNetV2
 from dotenv import load_dotenv
+from video_description_generator import VideoDescriptionGenerator
+from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
+from fastapi.responses import PlainTextResponse
 
 # Load environment variables
 load_dotenv('config.env')
@@ -21,163 +21,18 @@ class PrelabelRequest(BaseModel):
     task_id: str
     project_id: str
 
+class InstructionRequest(BaseModel):
+    instructions: str 
+
 # MongoDB connection
-MONGODB_URL = os.getenv('MONGODB_URL')
+MONGODB_URL = os.getenv('MONGO_URI')
 if not MONGODB_URL:
-    raise ValueError("MONGODB_URL environment variable is not set")
+    raise ValueError("MONGO_URI environment variable is not set")
 
 client = MongoClient(MONGODB_URL)
 db = client["AkaiDb0"]
 datapoints_collection = db["datapoints"]
 
-
-# VideoDescriptionGenerator class
-class VideoDescriptionGenerator:
-    def __init__(self, transnet_model_dir, gpt_api_key):
-        """Initialize the class with TransNetV2 model and GPT API key."""
-        self.transnet_model = TransNetV2(model_dir=transnet_model_dir)
-        self.gpt_api_key = gpt_api_key
-
-    def extract_keyframes(self, video_path):
-        """Extract keyframes from a video using TransNetV2."""
-        frames = []
-        vidcap = cv2.VideoCapture(video_path)
-        if not vidcap.isOpened():
-            print(f"Failed to open video: {video_path}")
-            return None
-        while True:
-            success, image = vidcap.read()
-            if not success:
-                break
-            frames.append(image)
-        vidcap.release()
-
-        if not frames:
-            print(f"No frames extracted from: {video_path}")
-            return None
-
-        try:
-            resized_frames = np.array([cv2.resize(frame, (48, 27)) for frame in frames], dtype=np.uint8)
-            _, scene_predictions = self.transnet_model.predict_frames(resized_frames)
-            scenes = TransNetV2.predictions_to_scenes(scene_predictions)
-            key_frames = [frames[scene_start] for scene_start, _ in scenes]
-            return key_frames
-        except Exception as e:
-            print(f"Error processing {video_path}: {e}")
-            return None
-
-    def generate_description(self, keyframes):
-        """Generate a description for a set of keyframes using the gpt-4o-mini API."""
-        try:
-            # Convert keyframes to base64
-            image_contents = []
-            for keyframe in keyframes:
-                _, buffer = cv2.imencode('.jpg', keyframe)
-                img_str = base64.b64encode(buffer.tobytes()).decode('utf-8')
-                image_contents.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}})
-
-            # Construct the API request
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.gpt_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4o-mini",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": """
-                                 
-You are an AI assistant that is to assist in data labeling of videos. Please analyze these video keyframes and identify the following aspects:
-1. Location (Where?)
-2. Number of participants (Who?)
-3. Event description (What?)
-4. Timing (When?)
-5. Objects present
-6. Actions/Activities
-7. Interactions
-8. Scene type
-9. Lighting conditions
-10. Weather (if applicable)
-11. Time of day
-12. Camera perspective
-13. Emotions/Expressions
-14. Text in scene
-15. Anomalies/Events
-16. Background and Foreground
-17. Occlusion
-18. Scale and Size
-19. Colors
-20. Additional notes: Provide any other observations or details that might be relevant.
-                                 
-Please provide detailed descriptions for each aspect based on the keyframes.
-For all of these aspect:
-- Generate 5 relevant questions that include a combination of the aspect and answers
-- Flag any uncertain information
-
-Additional requirements:
-- Generate relevant keywords describing the main elements and themes
-- Create a detailed description of the video in as many words as possible that includes all aspects of the video
-- Determine map placement from these options: Town, Village, Water body, Mountains, Snow, Road
-
-Example:
-For these keyframes:
-- Frame 1: People sitting in a classroom setting
-- Frame 2: A teacher writing on a blackboard
-                                 
-Instructions:
-- Output ONLY raw JSON (no markdown, no ```json blocks, no extra text)
-- The response must begin with `{` and end with `}`
-- Do not add any explanation, introduction, or comments                           
-
-Please provide output in exctly this format do not deviate from this json format:
-                                 
-
-{
-    "questions": [
-        {"q": "What is the setting and time of day for this educational activity?", "a": "An indoor classroom during daytime hours with natural lighting"},
-        {"q": "How many participants are present and what are their roles in this learning environment?", "a": "One teacher and approximately 20 students engaged in a lecture format"},
-        {"q": "What objects and equipment are visible in the classroom and how are they being used?", "a": "A whiteboard for instruction, desks and chairs arranged in rows, and a projector for visual aids"},
-        {"q": "What is the camera perspective and how does it capture the classroom dynamics?", "a": "Static camera positioned at the front of the class, providing a clear view of both teacher and student interactions"},
-        {"q": "What teaching methods and student interactions are visible in this educational setting?", "a": "Teacher-led instruction using board work, followed by student group discussions in a collaborative learning environment"}
-    ],
-    "keywords": ["education", "classroom", "teaching", "students", "group work", "learning"],
-    "map_placement": {
-        "value": "Town"
-    },
-    "summary": "The video depicts a daytime classroom scene with a teacher instructing approximately 20 students, followed by students engaging in group discussions. The classroom is equipped with desks, chairs, a whiteboard, and a projector. The lighting is well-lit with natural light, and the camera is static from the front of the class."
-}
-
-Please analyze the provided all keyframes and provide only one output combining all information in the same JSON structure
-"""}
-                            ] + image_contents
-                        }
-                    ]
-                }
-            )
-            if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
-            else:
-                print(f"API error: {response.status_code} - {response.text}")
-                return None
-        except Exception as e:
-            print(f"Error generating description: {e}")
-            return None
-
-    def process_videos(self, video_paths):
-        """Process a batch of videos, extracting keyframes and generating one description per video."""
-        results = {}
-        for video_path in video_paths:
-            keyframes = self.extract_keyframes(video_path)
-            if keyframes is None:
-                continue
-            description = self.generate_description(keyframes)
-            if description:
-                results[video_path] = description
-        return results
 
 # Initialize the generator
 TRANSNET_MODEL_DIR = os.getenv('TRANSNET_MODEL_DIR', './TransNetV2_Keyframe_Detection/transnetv2-weights/')
@@ -187,6 +42,83 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is not set")
 
 generator = VideoDescriptionGenerator(TRANSNET_MODEL_DIR, OPENAI_API_KEY)
+
+
+@app.post("/process-instructions", response_class=PlainTextResponse)
+async def process_instructions(instructions: str = Body(..., media_type="text/plain")):
+    
+    try:
+        # Use instructions directly instead of parsing JSON
+        prompt = f"""You are an AI assistant tasked with modifying a default prompt for analyzing video keyframes based on a user-provided paragraph that contains details about the dataset, special labeling instructions, and objects to focus on. Your goal is to update the default aspects list and example questions to align with the specific requirements of the dataset, ensuring high-quality labeling output.
+Here is the default prompt you will modify:
+kindly make sure to keep the same format as the default prompt given in string not any type of json: {VIDEO_ANALYSIS_PROMPT}
+
+Instructions for Modification:
+When you receive the user's paragraph, follow these steps:
+Analyze the Paragraph: Carefully read the user-provided paragraph to identify key details about the dataset, special labeling instructions, and objects or elements to focus on. Conduct a deep analysis to understand the context and specific requirements.
+Update the Aspects List:
+Start with the default aspects list provided above.
+Keep aspects that remain relevant to the dataset described in the paragraph.
+Modify existing aspects if the paragraph suggests a different focus or specificity (e.g., changing "Number of participants" to "Number of vehicles" for a traffic dataset).
+Remove aspects that are irrelevant based on the paragraph.
+Add new aspects if the paragraph highlights unique elements not covered in the default list (e.g., "Types of animals" for a wildlife dataset).
+Generate Example Questions:
+Based on the updated aspects list, create 5 new example questions that reflect the specific dataset and instructions from the paragraph.
+Ensure each question combines an aspect with a potential answer, tailored to the context (e.g., "What types of vehicles are present and what are their actions?" for a traffic dataset).
+The questions should cover the most critical aspects identified in the paragraph.
+Preserve Output Structure:
+The modified prompt will be used to analyze keyframes and produce a JSON output with the following structure:
+"questions": List of 5 question-answer pairs.
+"keywords": List of relevant keywords.
+"map_placement": Selected option (Town, Village, Water body, Mountains, Snow, Road).
+"summary": Detailed description of the video.
+Output the Modified Prompt:
+Your response should be the full text of the modified prompt, incorporating the updated aspects list and example questions.
+Maintain the structure of the default prompt, adjusting only the aspects list and example questions based on the paragraph.
+Do not analyze keyframes or produce the JSON output here—your task is to generate the modified prompt text that can later be used for keyframe analysis.
+Response Format:
+Provide the modified prompt as plain text, starting with "You are an AI assistant..." and including the updated aspects list and example questions.
+Do not include the JSON output or keyframe analysis in your response—only the modified prompt text.
+Example Workflow:
+If the user's paragraph is: "This dataset consists of videos from urban traffic cameras. Focus on identifying types of vehicles, traffic flow, and any incidents."
+Update aspects to include "Types of vehicles," "Traffic flow," "Incidents," while keeping relevant defaults like "Location" and "Timing."
+Remove irrelevant aspects like "Emotions/Expressions."
+Generate example questions like "What types of vehicles are visible and how are they moving?" and "Is there any incident affecting the traffic flow?"
+Paragraph Input: {instructions}
+"""
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 1000,
+                "temperature": 0.7
+            }
+        )
+        
+        if response.status_code == 200:
+            openai_response = response.json()['choices'][0]['message']['content']
+            # Replace escaped newlines with actual newlines for clean formatting
+            clean_response = openai_response.replace('\\n', '\n')
+            return PlainTextResponse(content=clean_response)
+        else:
+            print(f"OpenAI API error: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {response.status_code}")
+            
+    except Exception as e:
+        print(f"Error processing instructions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing instructions: {str(e)}")
+
 
 @app.post("/prelabel")
 async def prelabel_videos(request: PrelabelRequest, background_tasks: BackgroundTasks):
@@ -218,6 +150,8 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     # Schedule processing in the background
     background_tasks.add_task(process_datapoints, datapoints)
     return {"message": "Prelabeling started in the background"}
+
+
 
 def process_datapoints(datapoints):
     """Process datapoints and update their preLabel field in the database."""
