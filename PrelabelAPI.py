@@ -156,7 +156,7 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
             for project in user["projects"]:
                 if project.get("_id") == project_id:
                     # Get PreLabelPrompt if it exists inside instruction
-                    custom_prompt = project.get("instruction", {}).get("PreLabelPrompt")
+                    custom_prompt = project.get("instruction", {}).get("preLabelPrompt")
                     if custom_prompt:
                         print(f"Found custom prompt: {custom_prompt[:200]}...")
                     else:
