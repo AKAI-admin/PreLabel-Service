@@ -39,16 +39,26 @@ class VideoDescriptionGenerator:
             print(f"Error processing {video_path}: {e}")
             return None
 
-    def generate_description(self, keyframes):
+    def generate_description(self, keyframes, custom_prompt=None):
         """Generate a description for a set of keyframes using the gpt-4o-mini API."""
         try:
+            # Use custom prompt if provided, otherwise use default
+            if custom_prompt:
+                print(f"Using custom prompt")
+                prompt_to_use = custom_prompt
+            else:
+                print(f"Using default prompt")
+                prompt_to_use = VIDEO_ANALYSIS_PROMPT
+            
             # Convert keyframes to base64
             image_contents = []
-            for keyframe in keyframes:
+            for i, keyframe in enumerate(keyframes):
                 _, buffer = cv2.imencode('.jpg', keyframe)
                 img_str = base64.b64encode(buffer.tobytes()).decode('utf-8')
                 image_contents.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}})
+                print(f"Encoded keyframe {i+1}/{len(keyframes)}")
 
+            print("Making API request to OpenAI...")
             # Construct the API request
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -62,14 +72,17 @@ class VideoDescriptionGenerator:
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": VIDEO_ANALYSIS_PROMPT}
+                                {"type": "text", "text": prompt_to_use}
                             ] + image_contents
                         }
                     ]
                 }
             )
+            print(f"API response status: {response.status_code}")
             if response.status_code == 200:
-                return response.json()['choices'][0]['message']['content']
+                result = response.json()['choices'][0]['message']['content']
+                print(f"Successfully got response from OpenAI: {result[:100]}...")
+                return result
             else:
                 print(f"API error: {response.status_code} - {response.text}")
                 return None
@@ -77,14 +90,20 @@ class VideoDescriptionGenerator:
             print(f"Error generating description: {e}")
             return None
 
-    def process_videos(self, video_paths):
+    def process_videos(self, video_paths, custom_prompt=None):
         """Process a batch of videos, extracting keyframes and generating one description per video."""
         results = {}
         for video_path in video_paths:
+            print(f"Processing video: {video_path}")
             keyframes = self.extract_keyframes(video_path)
             if keyframes is None:
+                print(f"Failed to extract keyframes from {video_path}")
                 continue
-            description = self.generate_description(keyframes)
+            print(f"Extracted {len(keyframes)} keyframes from {video_path}")
+            description = self.generate_description(keyframes, custom_prompt)
             if description:
                 results[video_path] = description
+                print(f"Successfully generated description for {video_path}")
+            else:
+                print(f"Failed to generate description for {video_path}")
         return results
