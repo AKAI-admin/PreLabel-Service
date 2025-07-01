@@ -30,7 +30,7 @@ class InstructionRequest(BaseModel):
     instructions: str 
 
 # MongoDB connection
-MONGODB_URL = os.getenv('MONGO_URI')
+MONGODB_URL = os.getenv('MONGODB_URI')
 if not MONGODB_URL:
     raise ValueError("MONGO_URI environment variable is not set")
 
