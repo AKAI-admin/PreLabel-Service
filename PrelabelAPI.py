@@ -6,6 +6,7 @@ import os
 import json
 import yaml
 import requests
+import time
 from dotenv import load_dotenv
 from video_description_generator import VideoDescriptionGenerator
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
@@ -266,6 +267,11 @@ def process_datapoints(datapoints, custom_prompt=None , user_id=None):
                     )
                     print(f"✅ Successfully saved preLabel data to MongoDB for project_id: {datapoint['project_id']}")
                     update_pre_label_list(user_id,datapoint["project_id"])
+                    
+                    # Add cooling time after successful processing to prevent CPU overheating
+                    print(f"💤 Cooling down CPU for 10 seconds...")
+                    time.sleep(10)
+                    
                 except json.JSONDecodeError as e:
                     print(f"JSON Decode Error for {video_path}: {e}")
                     print(f"Response that failed to parse: {description}")
