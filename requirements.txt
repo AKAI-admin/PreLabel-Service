@@ -11,3 +11,6 @@ tensorflow
 ffmpeg-python
 Pillow
 datetime
+scikit-image
+scikit-video
+sewar

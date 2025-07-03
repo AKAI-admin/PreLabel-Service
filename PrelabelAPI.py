@@ -12,6 +12,15 @@ from video_description_generator import VideoDescriptionGenerator
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
 from fastapi.responses import PlainTextResponse
 from datetime import datetime , timedelta
+import subprocess
+import uuid
+import re
+import ffmpeg
+import cv2
+import numpy as np
+import tempfile
+import shutil
+from sewar.full_ref import mse, psnr, ssim
 
 
 
@@ -223,12 +232,156 @@ def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
     except Exception as e:
         print("Error in update_pre_label_list:", str(e))
 
+# def calculate_video_quality_metrics(original_path: str, compressed_path: str) -> dict:
+#     """Calculate video quality metrics and file info using sewar library - comprehensive version."""
+#     try:
+#         # Get file sizes
+#         original_size = os.path.getsize(original_path) / 1048576  # MB
+#         compressed_size = os.path.getsize(compressed_path) / 1048576  # MB
+        
+#         cap_orig, cap_comp = cv2.VideoCapture(original_path), cv2.VideoCapture(compressed_path)
+#         if not (cap_orig.isOpened() and cap_comp.isOpened()):
+#             return {"error": "Could not open video files"}
+        
+#         # Sample 5 frames for quick analysis
+#         frames_data = []
+#         for _ in range(5):
+#             ret_orig, frame_orig = cap_orig.read()
+#             ret_comp, frame_comp = cap_comp.read()
+#             if not (ret_orig and ret_comp): break
+            
+#             gray_orig = cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY)
+#             gray_comp = cv2.cvtColor(frame_comp, cv2.COLOR_BGR2GRAY)
+#             if gray_orig.shape != gray_comp.shape:
+#                 gray_comp = cv2.resize(gray_comp, (gray_orig.shape[1], gray_orig.shape[0]))
+            
+#             frames_data.append({
+#                 'psnr': psnr(gray_orig, gray_comp),
+#                 'ssim': ssim(gray_orig, gray_comp),
+#                 'mse': mse(gray_orig, gray_comp)
+#             })
+        
+#         cap_orig.release()
+#         cap_comp.release()
+        
+#         if not frames_data:
+#             return {"error": "No frames processed"}
+        
+#         avg_metrics = {k: np.mean([f[k] for f in frames_data]) for k in ['psnr', 'ssim', 'mse']}
+#         size_reduction = ((original_size - compressed_size) / original_size) * 100 if original_size > 0 else 0
+        
+#         return {
+#             "avg_psnr": round(avg_metrics['psnr'], 2),
+#             "avg_ssim": round(avg_metrics['ssim'], 4),
+#             "avg_mse": round(avg_metrics['mse'], 2),
+#             "original_size_mb": round(original_size, 2),
+#             "compressed_size_mb": round(compressed_size, 2),
+#             "size_reduction_percent": round(size_reduction, 2),
+#             "compression_ratio": round(original_size / compressed_size, 2) if compressed_size > 0 else 0,
+#             "frames_analyzed": len(frames_data)
+#         }
+#     except Exception as e:
+#         return {"error": f"Error: {str(e)}"}
+
+def download_and_compress_video(video_url: str) -> str:
+    """Download and compress video with cross-platform compatibility."""
+    try:
+        # Check if ffmpeg is available
+        try:
+            subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            raise Exception("ffmpeg is not installed or not in PATH")
+        
+        # Create cross-platform temporary files
+        temp_dir = tempfile.gettempdir()
+        local_filename = os.path.join(temp_dir, f"{uuid.uuid4()}.mp4")
+        compressed_filename = os.path.join(temp_dir, f"compressed_{uuid.uuid4()}.mp4")
+
+        # Download video with timeout and size limit
+        print(f"Downloading video from: {video_url}")
+        with requests.get(video_url, stream=True, timeout=300) as r:
+            r.raise_for_status()
+            
+            # Check content length if available
+            total_size = int(r.headers.get('content-length', 0))
+            if total_size > 500 * 1024 * 1024:  # 500MB limit
+                raise Exception(f"Video too large: {total_size / (1024*1024):.1f}MB (limit: 500MB)")
+            
+            with open(local_filename, 'wb') as f:
+                downloaded = 0
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        # Safety check during download
+                        if downloaded > 500 * 1024 * 1024:
+                            raise Exception("Download size exceeded 500MB limit")
+        
+        print(f"Downloaded video to: {local_filename}")
+
+        # Compress using ffmpeg with error handling
+        print(f"Compressing video to: {compressed_filename}")
+        cmd = [
+            "ffmpeg", "-y",  # Overwrite output files
+            "-i", local_filename,
+            "-vcodec", "libx264", 
+            "-crf", "28",
+            "-preset", "fast",
+            "-movflags", "+faststart",  # Optimize for streaming
+            compressed_filename
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            raise Exception(f"ffmpeg compression failed: {result.stderr}")
+        
+        print(f"Compression completed.")
+
+        # # Calculate comprehensive quality metrics
+        # print("🔬 Analyzing video quality and compression efficiency...")
+        # quality_metrics = calculate_video_quality_metrics(local_filename, compressed_filename)
+        # if "error" not in quality_metrics:
+        #     print(f"📊 Quality Analysis Results:")
+        #     print(f"   • Original size: {quality_metrics['original_size_mb']} MB")
+        #     print(f"   • Compressed size: {quality_metrics['compressed_size_mb']} MB")
+        #     print(f"   • Size reduction: {quality_metrics['size_reduction_percent']}%")
+        #     print(f"   • Compression ratio: {quality_metrics['compression_ratio']}:1")
+        #     print(f"   • Average PSNR: {quality_metrics['avg_psnr']} dB")
+        #     print(f"   • Average SSIM: {quality_metrics['avg_ssim']}")
+        #     print(f"   • Average MSE: {quality_metrics['avg_mse']}")
+        #     print(f"   • Frames analyzed: {quality_metrics['frames_analyzed']}")
+        # else:
+        #     print(f"⚠️ Could not calculate quality metrics: {quality_metrics['error']}")
+
+        # Clean up original file
+        try:
+            os.remove(local_filename)
+            print(f"🗑️ Cleaned up original file")
+        except Exception as cleanup_error:
+            print(f"⚠️ Could not clean up original file: {cleanup_error}")
+
+        return compressed_filename
+    except Exception as e:
+        # Clean up any partial files
+        for filepath in [locals().get('local_filename'), locals().get('compressed_filename')]:
+            if filepath and os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except:
+                    pass
+        print(f"Error in downloading or compressing video: {e}")
+        raise
+
 def process_datapoints(datapoints, custom_prompt=None , user_id=None):
     """Process datapoints and update their preLabel field in the database."""
     print(f"Starting to process {len(datapoints)} datapoints")
     for i, datapoint in enumerate(datapoints):
-        video_path = datapoint["mediaUrl"]
+        # video_path = datapoint["mediaUrl"]
+        video_path_mongodb = datapoint["mediaUrl"] 
         try:
+            print(f"Downloading and compressing video {i+1}/{len(datapoints)}: {video_path_mongodb}")
+            video_path = download_and_compress_video(video_path_mongodb)
+
             # Process video and get description using custom prompt if available
             print(f"Processing video {i+1}/{len(datapoints)}: {video_path}")
             results = generator.process_videos([video_path], custom_prompt)
