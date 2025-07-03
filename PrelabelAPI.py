@@ -421,6 +421,14 @@ def process_datapoints(datapoints, custom_prompt=None , user_id=None):
                     print(f"✅ Successfully saved preLabel data to MongoDB for project_id: {datapoint['project_id']}")
                     update_pre_label_list(user_id,datapoint["project_id"])
                     
+                    # Clean up temporary video file
+                    if os.path.exists(video_path):
+                        try:
+                            os.remove(video_path)
+                            print(f"🧹 Cleaned up temporary video file: {video_path}")
+                        except Exception as cleanup_error:
+                            print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
+                    
                     # Add cooling time after successful processing to prevent CPU overheating
                     print(f"💤 Cooling down CPU for 10 seconds...")
                     time.sleep(10)
@@ -433,6 +441,13 @@ def process_datapoints(datapoints, custom_prompt=None , user_id=None):
                         {"_id": datapoint["_id"]},
                         {"$set": {"processingStatus": "created"}}
                     )
+                    # Clean up temporary video file
+                    if os.path.exists(video_path):
+                        try:
+                            os.remove(video_path)
+                            print(f"🧹 Cleaned up temporary video file: {video_path}")
+                        except Exception as cleanup_error:
+                            print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
                 except KeyError as e:
                     print(f"Missing key in JSON response for {video_path}: {e}")
                     print(f"Available keys: {list(desc_json.keys()) if 'desc_json' in locals() else 'Unable to parse JSON'}")
@@ -441,6 +456,13 @@ def process_datapoints(datapoints, custom_prompt=None , user_id=None):
                         {"_id": datapoint["_id"]},
                         {"$set": {"processingStatus": "created"}}
                     )
+                    # Clean up temporary video file
+                    if os.path.exists(video_path):
+                        try:
+                            os.remove(video_path)
+                            print(f"🧹 Cleaned up temporary video file: {video_path}")
+                        except Exception as cleanup_error:
+                            print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
             else:
                 print(f"No description generated for {video_path}")
                 # Update status back to created if no description was generated
@@ -448,13 +470,27 @@ def process_datapoints(datapoints, custom_prompt=None , user_id=None):
                     {"_id": datapoint["_id"]},
                     {"$set": {"processingStatus": "created"}}
                 )
+                # Clean up temporary video file
+                if os.path.exists(video_path):
+                    try:
+                        os.remove(video_path)
+                        print(f"🧹 Cleaned up temporary video file: {video_path}")
+                    except Exception as cleanup_error:
+                        print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
         except Exception as e:
-            print(f"Error processing {video_path}: {e}")
+            print(f"Error processing {video_path_mongodb}: {e}")
             # Update status back to created if an error occurred
             datapoints_collection.update_one(
                 {"_id": datapoint["_id"]},
                 {"$set": {"processingStatus": "created"}}
             )
+            # Clean up video_path if it was assigned before the error
+            if 'video_path' in locals() and video_path and os.path.exists(video_path):
+                try:
+                    os.remove(video_path)
+                    print(f"🧹 Cleaned up temporary video file: {video_path}")
+                except Exception as cleanup_error:
+                    print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
 
 if __name__ == "__main__":
     import uvicorn
