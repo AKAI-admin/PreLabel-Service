@@ -232,56 +232,56 @@ def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
     except Exception as e:
         print("Error in update_pre_label_list:", str(e))
 
-# def calculate_video_quality_metrics(original_path: str, compressed_path: str) -> dict:
-#     """Calculate video quality metrics and file info using sewar library - comprehensive version."""
-#     try:
-#         # Get file sizes
-#         original_size = os.path.getsize(original_path) / 1048576  # MB
-#         compressed_size = os.path.getsize(compressed_path) / 1048576  # MB
+def calculate_video_quality_metrics(original_path: str, compressed_path: str) -> dict:
+    """Calculate video quality metrics and file info using sewar library - comprehensive version."""
+    try:
+        # Get file sizes
+        original_size = os.path.getsize(original_path) / 1048576  # MB
+        compressed_size = os.path.getsize(compressed_path) / 1048576  # MB
         
-#         cap_orig, cap_comp = cv2.VideoCapture(original_path), cv2.VideoCapture(compressed_path)
-#         if not (cap_orig.isOpened() and cap_comp.isOpened()):
-#             return {"error": "Could not open video files"}
+        cap_orig, cap_comp = cv2.VideoCapture(original_path), cv2.VideoCapture(compressed_path)
+        if not (cap_orig.isOpened() and cap_comp.isOpened()):
+            return {"error": "Could not open video files"}
         
-#         # Sample 5 frames for quick analysis
-#         frames_data = []
-#         for _ in range(5):
-#             ret_orig, frame_orig = cap_orig.read()
-#             ret_comp, frame_comp = cap_comp.read()
-#             if not (ret_orig and ret_comp): break
+        # Sample 5 frames for quick analysis
+        frames_data = []
+        for _ in range(5):
+            ret_orig, frame_orig = cap_orig.read()
+            ret_comp, frame_comp = cap_comp.read()
+            if not (ret_orig and ret_comp): break
             
-#             gray_orig = cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY)
-#             gray_comp = cv2.cvtColor(frame_comp, cv2.COLOR_BGR2GRAY)
-#             if gray_orig.shape != gray_comp.shape:
-#                 gray_comp = cv2.resize(gray_comp, (gray_orig.shape[1], gray_orig.shape[0]))
+            gray_orig = cv2.cvtColor(frame_orig, cv2.COLOR_BGR2GRAY)
+            gray_comp = cv2.cvtColor(frame_comp, cv2.COLOR_BGR2GRAY)
+            if gray_orig.shape != gray_comp.shape:
+                gray_comp = cv2.resize(gray_comp, (gray_orig.shape[1], gray_orig.shape[0]))
             
-#             frames_data.append({
-#                 'psnr': psnr(gray_orig, gray_comp),
-#                 'ssim': ssim(gray_orig, gray_comp),
-#                 'mse': mse(gray_orig, gray_comp)
-#             })
+            frames_data.append({
+                'psnr': psnr(gray_orig, gray_comp),
+                'ssim': ssim(gray_orig, gray_comp),
+                'mse': mse(gray_orig, gray_comp)
+            })
         
-#         cap_orig.release()
-#         cap_comp.release()
+        cap_orig.release()
+        cap_comp.release()
         
-#         if not frames_data:
-#             return {"error": "No frames processed"}
+        if not frames_data:
+            return {"error": "No frames processed"}
         
-#         avg_metrics = {k: np.mean([f[k] for f in frames_data]) for k in ['psnr', 'ssim', 'mse']}
-#         size_reduction = ((original_size - compressed_size) / original_size) * 100 if original_size > 0 else 0
+        avg_metrics = {k: np.mean([f[k] for f in frames_data]) for k in ['psnr', 'ssim', 'mse']}
+        size_reduction = ((original_size - compressed_size) / original_size) * 100 if original_size > 0 else 0
         
-#         return {
-#             "avg_psnr": round(avg_metrics['psnr'], 2),
-#             "avg_ssim": round(avg_metrics['ssim'], 4),
-#             "avg_mse": round(avg_metrics['mse'], 2),
-#             "original_size_mb": round(original_size, 2),
-#             "compressed_size_mb": round(compressed_size, 2),
-#             "size_reduction_percent": round(size_reduction, 2),
-#             "compression_ratio": round(original_size / compressed_size, 2) if compressed_size > 0 else 0,
-#             "frames_analyzed": len(frames_data)
-#         }
-#     except Exception as e:
-#         return {"error": f"Error: {str(e)}"}
+        return {
+            "avg_psnr": round(avg_metrics['psnr'], 2),
+            "avg_ssim": round(avg_metrics['ssim'], 4),
+            "avg_mse": round(avg_metrics['mse'], 2),
+            "original_size_mb": round(original_size, 2),
+            "compressed_size_mb": round(compressed_size, 2),
+            "size_reduction_percent": round(size_reduction, 2),
+            "compression_ratio": round(original_size / compressed_size, 2) if compressed_size > 0 else 0,
+            "frames_analyzed": len(frames_data)
+        }
+    except Exception as e:
+        return {"error": f"Error: {str(e)}"}
 
 def download_and_compress_video(video_url: str) -> str:
     """Download and compress video with cross-platform compatibility."""
@@ -337,21 +337,21 @@ def download_and_compress_video(video_url: str) -> str:
         
         print(f"Compression completed.")
 
-        # # Calculate comprehensive quality metrics
-        # print("🔬 Analyzing video quality and compression efficiency...")
-        # quality_metrics = calculate_video_quality_metrics(local_filename, compressed_filename)
-        # if "error" not in quality_metrics:
-        #     print(f"📊 Quality Analysis Results:")
-        #     print(f"   • Original size: {quality_metrics['original_size_mb']} MB")
-        #     print(f"   • Compressed size: {quality_metrics['compressed_size_mb']} MB")
-        #     print(f"   • Size reduction: {quality_metrics['size_reduction_percent']}%")
-        #     print(f"   • Compression ratio: {quality_metrics['compression_ratio']}:1")
-        #     print(f"   • Average PSNR: {quality_metrics['avg_psnr']} dB")
-        #     print(f"   • Average SSIM: {quality_metrics['avg_ssim']}")
-        #     print(f"   • Average MSE: {quality_metrics['avg_mse']}")
-        #     print(f"   • Frames analyzed: {quality_metrics['frames_analyzed']}")
-        # else:
-        #     print(f"⚠️ Could not calculate quality metrics: {quality_metrics['error']}")
+        # Calculate comprehensive quality metrics
+        print("🔬 Analyzing video quality and compression efficiency...")
+        quality_metrics = calculate_video_quality_metrics(local_filename, compressed_filename)
+        if "error" not in quality_metrics:
+            print(f"📊 Quality Analysis Results:")
+            print(f"   • Original size: {quality_metrics['original_size_mb']} MB")
+            print(f"   • Compressed size: {quality_metrics['compressed_size_mb']} MB")
+            print(f"   • Size reduction: {quality_metrics['size_reduction_percent']}%")
+            print(f"   • Compression ratio: {quality_metrics['compression_ratio']}:1")
+            print(f"   • Average PSNR: {quality_metrics['avg_psnr']} dB")
+            print(f"   • Average SSIM: {quality_metrics['avg_ssim']}")
+            print(f"   • Average MSE: {quality_metrics['avg_mse']}")
+            print(f"   • Frames analyzed: {quality_metrics['frames_analyzed']}")
+        else:
+            print(f"⚠️ Could not calculate quality metrics: {quality_metrics['error']}")
 
         # Clean up original file
         try:
