@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import requests
 import base64
+import subprocess
 from transnetv2 import TransNetV2
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
 
@@ -12,31 +13,55 @@ class VideoDescriptionGenerator:
         self.gpt_api_key = gpt_api_key
 
     def extract_keyframes(self, video_path):
-        """Extract keyframes from a video using TransNetV2."""
-        frames = []
-        vidcap = cv2.VideoCapture(video_path)
-        if not vidcap.isOpened():
-            print(f"Failed to open video: {video_path}")
-            return None
-        while True:
-            success, image = vidcap.read()
-            if not success:
-                break
-            frames.append(image)
-        vidcap.release()
+        """Extract keyframes from a video path using TransNetV2, streamed and downscaled via ffmpeg."""
+        
+        # TransNetV2 input resolution (can be changed if needed)
+        target_width, target_height = 48, 27
+        frame_size = target_width * target_height * 3  # 3 bytes per pixel for BGR
 
-        if not frames:
-            print(f"No frames extracted from: {video_path}")
-            return None
+        # FFmpeg command to stream and resize video
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-i", video_path,             # input path/URL
+            "-vf", f"scale={target_width}:{target_height}",  # scale to target size
+            "-f", "rawvideo",            # raw video output
+            "-pix_fmt", "bgr24",         # pixel format compatible with OpenCV
+            "-vcodec", "rawvideo",       # raw output
+            "-nostdin",                  # avoid ffmpeg waiting for input
+            "-"                          # write to stdout
+        ]
 
         try:
-            resized_frames = np.array([cv2.resize(frame, (48, 27)) for frame in frames], dtype=np.uint8)
+            # Start ffmpeg process
+            pipe = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**8)
+            frames = []
+
+            while True:
+                raw_frame = pipe.stdout.read(frame_size)
+                if not raw_frame:
+                    break
+
+                frame = np.frombuffer(raw_frame, np.uint8).reshape((target_height, target_width, 3))
+                frames.append(frame)
+
+            pipe.stdout.close()
+            pipe.wait()
+
+            if not frames:
+                print(f"⚠️ No frames extracted from: {video_path}")
+                return None
+
+            # Predict scene changes
+            resized_frames = np.array(frames, dtype=np.uint8)
             _, scene_predictions = self.transnet_model.predict_frames(resized_frames)
-            scenes = TransNetV2.predictions_to_scenes(scene_predictions)
+            scenes = self.transnet_model.predictions_to_scenes(scene_predictions)
+
             key_frames = [frames[scene_start] for scene_start, _ in scenes]
+            print("✅ Keyframes extracted successfully")
             return key_frames
+
         except Exception as e:
-            print(f"Error processing {video_path}: {e}")
+            print(f"❌ Error extracting keyframes from stream: {e}")
             return None
 
     def generate_description(self, keyframes, custom_prompt=None):
