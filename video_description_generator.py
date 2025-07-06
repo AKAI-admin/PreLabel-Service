@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import requests
 import base64
-import subprocess
 from transnetv2 import TransNetV2
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
 
@@ -12,44 +11,117 @@ class VideoDescriptionGenerator:
         self.transnet_model = TransNetV2(model_dir=transnet_model_dir)
         self.gpt_api_key = gpt_api_key
 
-    def extract_keyframes(self, video_path):
-        """Extract keyframes from a video path using TransNetV2, streamed and downscaled via ffmpeg."""
+    def extract_keyframes(self, video_path, compression_quality=30, frame_skip=2, max_frames=1000):
+        """Extract keyframes from a video path using OpenCV VideoCapture with aggressive compression for 4K videos.
         
-        # TransNetV2 input resolution (can be changed if needed)
+        Args:
+            video_path: URL or local path to video
+            compression_quality: JPEG compression quality (1-100, lower = more compression) - default 30 for 4K
+            frame_skip: Skip every N frames for temporal compression (2 = process every 3rd frame)
+            max_frames: Maximum number of frames to process (prevents memory overflow on long 4K videos)
+        """
+        
+        # TransNetV2 input resolution - very small for 4K compression
         target_width, target_height = 48, 27
-        frame_size = target_width * target_height * 3  # 3 bytes per pixel for BGR
-
-        # FFmpeg command to stream and resize video
-        ffmpeg_cmd = [
-            "ffmpeg",
-            "-i", video_path,             # input path/URL
-            "-vf", f"scale={target_width}:{target_height}",  # scale to target size
-            "-f", "rawvideo",            # raw video output
-            "-pix_fmt", "bgr24",         # pixel format compatible with OpenCV
-            "-vcodec", "rawvideo",       # raw output
-            "-nostdin",                  # avoid ffmpeg waiting for input
-            "-"                          # write to stdout
-        ]
 
         try:
-            # Start ffmpeg process
-            pipe = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**8)
+            # Open video stream directly with OpenCV (works with URLs)
+            cap = cv2.VideoCapture(video_path)
+            
+            # Optimize buffer settings for streaming large videos
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to prevent memory buildup
+            
+            if not cap.isOpened():
+                print(f"❌ Could not open video stream: {video_path}")
+                return None
+
+            # Get video properties for optimization
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            
+            print(f"📹 Streaming video from: {video_path}")
+            print(f"📊 Video info: {total_frames} frames at {fps:.2f} FPS, Resolution: {width}x{height}")
+            
+            # Calculate compression settings - focus on quality reduction, not frame skipping
+            is_4k = width >= 3840 or height >= 2160
+            is_hd = width >= 1920 or height >= 1080
+            
+            if is_4k:
+                print("🎬 4K video detected - applying aggressive quality compression")
+                # For 4K: keep all frames but use very low quality
+                actual_frame_skip = frame_skip  # No forced frame skipping
+                actual_quality = min(compression_quality, 15)  # Very low quality for 4K
+            elif is_hd:
+                print("📺 HD video detected - applying moderate quality compression")
+                actual_frame_skip = frame_skip  # No forced frame skipping
+                actual_quality = min(compression_quality, 25)  # Low quality for HD
+            else:
+                print("📱 Standard resolution - using normal compression")
+                actual_frame_skip = frame_skip
+                actual_quality = compression_quality
+
             frames = []
-
+            frame_count = 0
+            processed_count = 0
+            
+            # Enhanced JPEG compression parameters for aggressive quality reduction
+            if is_4k:
+                # Very aggressive compression for 4K
+                jpeg_params = [
+                    cv2.IMWRITE_JPEG_QUALITY, actual_quality,
+                    cv2.IMWRITE_JPEG_PROGRESSIVE, 1,  # Progressive JPEG for better compression
+                    cv2.IMWRITE_JPEG_OPTIMIZE, 1      # Optimize Huffman tables
+                ]
+            else:
+                # Standard JPEG compression
+                jpeg_params = [cv2.IMWRITE_JPEG_QUALITY, actual_quality]
+            
             while True:
-                raw_frame = pipe.stdout.read(frame_size)
-                if not raw_frame:
+                ret, frame = cap.read()
+                if not ret:
                     break
+                
+                frame_count += 1
+                
+                # Temporal compression: Skip frames
+                if frame_count % (actual_frame_skip + 1) != 0:
+                    continue
+                
+                # Early exit for long videos to prevent memory overflow
+                if processed_count >= max_frames:
+                    print(f"⚠️ Reached maximum frames limit ({max_frames}), stopping processing")
+                    break
+                
+                # Spatial compression: Resize frame
+                resized_frame = cv2.resize(frame, (target_width, target_height))
+                
+                # Quality compression: Encode as JPEG and decode back
+                # This applies lossy compression to reduce memory usage
+                _, encoded_frame = cv2.imencode('.jpg', resized_frame, jpeg_params)
+                compressed_frame = cv2.imdecode(encoded_frame, cv2.IMREAD_COLOR)
+                
+                frames.append(compressed_frame)
+                processed_count += 1
+                
+                # Progress reporting
+                if processed_count % 50 == 0:
+                    compression_ratio = (frame_count / processed_count) if processed_count > 0 else 1
+                    print(f"📊 Processed {processed_count} frames (compression ratio: {compression_ratio:.1f}x)")
+                
+                # Memory management for 4K videos - more frequent since keeping all frames
+                if is_4k and processed_count % 100 == 0:
+                    import gc
+                    gc.collect()  # More frequent garbage collection for 4K videos
 
-                frame = np.frombuffer(raw_frame, np.uint8).reshape((target_height, target_width, 3))
-                frames.append(frame)
-
-            pipe.stdout.close()
-            pipe.wait()
+            cap.release()
 
             if not frames:
                 print(f"⚠️ No frames extracted from: {video_path}")
                 return None
+
+            print(f"✅ Extracted {len(frames)} frames from stream")
 
             # Predict scene changes
             resized_frames = np.array(frames, dtype=np.uint8)
@@ -115,12 +187,12 @@ class VideoDescriptionGenerator:
             print(f"Error generating description: {e}")
             return None
 
-    def process_videos(self, video_paths, custom_prompt=None):
+    def process_videos(self, video_paths, custom_prompt=None, compression_quality=30, frame_skip=2):
         """Process a batch of videos, extracting keyframes and generating one description per video."""
         results = {}
         for video_path in video_paths:
             print(f"Processing video: {video_path}")
-            keyframes = self.extract_keyframes(video_path)
+            keyframes = self.extract_keyframes(video_path, compression_quality, frame_skip)
             if keyframes is None:
                 print(f"Failed to extract keyframes from {video_path}")
                 continue
