@@ -41,24 +41,24 @@ class VideoDescriptionGenerator:
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            print(f"📹 Streaming video from: {video_path}")
-            print(f"📊 Video info: {total_frames} frames at {fps:.2f} FPS, Resolution: {width}x{height}")
+            print(f"Streaming video from: {video_path}")
+            print(f"Video info: {total_frames} frames at {fps:.2f} FPS, Resolution: {width}x{height}")
             
             # Calculate compression settings - focus on quality reduction, not frame skipping
             is_4k = width >= 3840 or height >= 2160
             is_hd = width >= 1920 or height >= 1080
             
             if is_4k:
-                print("🎬 4K video detected - applying aggressive quality compression")
+                print("4K video detected - applying aggressive quality compression")
                 # For 4K: keep all frames but use very low quality
                 actual_frame_skip = frame_skip  # No forced frame skipping
                 actual_quality = min(compression_quality, 15)  # Very low quality for 4K
             elif is_hd:
-                print("📺 HD video detected - applying moderate quality compression")
+                print("HD video detected - applying moderate quality compression")
                 actual_frame_skip = frame_skip  # No forced frame skipping
                 actual_quality = min(compression_quality, 25)  # Low quality for HD
             else:
-                print("📱 Standard resolution - using normal compression")
+                print("Standard resolution - using normal compression")
                 actual_frame_skip = frame_skip
                 actual_quality = compression_quality
 
@@ -108,7 +108,7 @@ class VideoDescriptionGenerator:
                 # Progress reporting
                 if processed_count % 50 == 0:
                     compression_ratio = (frame_count / processed_count) if processed_count > 0 else 1
-                    print(f"📊 Processed {processed_count} frames (compression ratio: {compression_ratio:.1f}x)")
+                    print(f"Processed {processed_count} frames (compression ratio: {compression_ratio:.1f}x)")
                 
                 # Memory management for 4K videos - more frequent since keeping all frames
                 if is_4k and processed_count % 100 == 0:
@@ -178,7 +178,7 @@ class VideoDescriptionGenerator:
             print(f"API response status: {response.status_code}")
             if response.status_code == 200:
                 result = response.json()['choices'][0]['message']['content']
-                print(f"Successfully got response from OpenAI: {result[:100]}...")
+                print(f"Successfully got response from OpenAI")
                 return result
             else:
                 print(f"API error: {response.status_code} - {response.text}")
