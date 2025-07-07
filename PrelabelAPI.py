@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks , Body
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Body, Query
 from pydantic import BaseModel
 from pymongo import MongoClient
 from bson import ObjectId
@@ -52,13 +52,24 @@ generator = VideoDescriptionGenerator(TRANSNET_MODEL_DIR, OPENAI_API_KEY)
 
 
 @app.post("/process-instructions", response_class=PlainTextResponse)
-async def process_instructions(instructions: str = Body(..., media_type="text/plain")):
+async def process_instructions(
+    instructions: str = Body(..., media_type="text/plain"),
+    platform: str = Query(None, description="Platform type to determine which prompt to use (e.g., 'ads')")
+):
     
     try:
+        # Determine which prompt to use based on platform parameter
+        if platform and platform.lower() == "ads":
+            base_prompt = VIDEO_ANALYSIS_PROMPT_ADS
+            print("🎯 Using ADS prompt for process-instructions based on platform parameter")
+        else:
+            base_prompt = VIDEO_ANALYSIS_PROMPT
+            print("🎯 Using default prompt for process-instructions")
+        
         # Use instructions directly instead of parsing JSON
         prompt = f"""You are an AI assistant tasked with modifying a default prompt for analyzing video keyframes based on a user-provided paragraph that contains details about the dataset, special labeling instructions, and objects to focus on. Your goal is to update the default aspects list and example questions to align with the specific requirements of the dataset, ensuring high-quality labeling output.
 Here is the default prompt you will modify:
-kindly make sure to keep the same format as the default prompt given in string not any type of json: {VIDEO_ANALYSIS_PROMPT}
+kindly make sure to keep the same format as the default prompt given in string not any type of json: {base_prompt}
 
 Instructions for Modification:
 When you receive the user's paragraph, follow these steps:
