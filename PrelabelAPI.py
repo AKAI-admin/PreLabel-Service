@@ -14,6 +14,7 @@ from fastapi.responses import PlainTextResponse
 from datetime import datetime , timedelta
 import numpy as np
 from sewar.full_ref import mse, psnr, ssim
+from video_analysis_prompt_ads import VIDEO_ANALYSIS_PROMPT_ADS
 
 # Load environment variables
 load_dotenv('config.env')
@@ -142,30 +143,58 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
         "project_id": project_id,
         "processingStatus": "created"
     }
-    datapoints = list(datapoints_collection.find(query))
+    datapoints = list(datapoints_collection.find(query)) 
 
     if not datapoints:
         raise HTTPException(status_code=404, detail="No datapoints found with 'created' status for the given task_id and project_id")
 
+
     # Fetch custom prompt from users collection if available
     custom_prompt = None
+    is_ads_project = False
     try:
+        print(f"🔍 Looking for project_id: {project_id}")
         # Find user document where one of the projects has _id == project_id
         user = users_collection.find_one({"projects._id": project_id})
-        
+        print(f"🔍 Found user: {user is not None}")
+
         if user and "projects" in user:
+            print(f"🔍 User has {len(user['projects'])} projects")
             for project in user["projects"]:
                 if project.get("_id") == project_id:
-                    # Get PreLabelPrompt if it exists inside instruction
-                    custom_prompt = project.get("instruction", {}).get("preLabelPrompt")
-                    if custom_prompt:
-                        print(f"Found custom prompt: {custom_prompt[:200]}...")
+                    print(f"🔍 Found matching project with labeledBy: {project.get('labeledBy')}")
+
+                    # Check if labeledBy is ads or not
+                    if project.get("labeledBy") == "ads":
+                        is_ads_project = True
+                        print("🎯 Labeled by ads")
+                        
+                        # Get PreLabelPrompt if it exists inside instruction
+                        prelabel_prompt = project.get("instruction", {}).get("preLabelPrompt")
+                        print(f"🔍 PreLabelPrompt exists: {prelabel_prompt is not None}")
+                        if prelabel_prompt:
+                            custom_prompt = prelabel_prompt
+                            print(f"✅ Using custom preLabelPrompt for ads project: {custom_prompt[:200]}...")
+                        else:
+                            custom_prompt = VIDEO_ANALYSIS_PROMPT_ADS
+                            print("✅ Using ADS default prompt")
                     else:
-                        print("No custom prompt found, will use default")
+                        is_ads_project = False
+                        print(f"🎯 Not ads project (labeledBy: {project.get('labeledBy')})")
+                        # For non-ads projects, get PreLabelPrompt if it exists
+                        prelabel_prompt = project.get("instruction", {}).get("preLabelPrompt")
+                        if prelabel_prompt:
+                            custom_prompt = prelabel_prompt
+                            print(f"✅ Found custom prompt for non-ads project: {custom_prompt[:200]}...")
+                        else:
+                            custom_prompt = VIDEO_ANALYSIS_PROMPT
+                            print("✅ Using default VIDEO_ANALYSIS_PROMPT for non-ads project")
                     break
+        else:
+            print("❌ No user found or user has no projects")
                     
     except Exception as e:
-        print(f"Error fetching custom prompt: {e}")
+        print(f"❌ Error fetching custom prompt: {e}")
 
     # Update status to "pre-label" for all selected datapoints
     datapoint_ids = [dp["_id"] for dp in datapoints]
@@ -175,7 +204,7 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     )
 
     # Schedule processing in the background
-    background_tasks.add_task(process_datapoints, datapoints, custom_prompt , user_id=user_id)
+    background_tasks.add_task(process_datapoints, datapoints, custom_prompt, user_id=user_id, is_ads_project=is_ads_project)
     return {"message": "Prelabeling started in the background"}
 
 def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
@@ -223,9 +252,11 @@ def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
     except Exception as e:
         print("Error in update_pre_label_list:", str(e))
 
-def process_datapoints(datapoints, custom_prompt=None , user_id=None):
+def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_project=False):
     """Process datapoints and update their preLabel field in the database."""
     print(f"Starting to process {len(datapoints)} datapoints")
+    print(f"🏷️ Project type: {'ADS' if is_ads_project else 'NON-ADS'}")
+    
     for i, datapoint in enumerate(datapoints):
         video_path = datapoint["mediaUrl"]
         try:
@@ -236,22 +267,58 @@ def process_datapoints(datapoints, custom_prompt=None , user_id=None):
             description = results.get(video_path)
             if description:
                 print(f"Description received")
+
                 try:
                     # Parse the JSON description
                     desc_json = json.loads(description)
-                    prelabel = {
-                        "questions": [
-                            {
-                                "q": q["q"],
-                                "a": q["a"],
+                    
+                    if is_ads_project:
+                        # For ADS projects, handle the different response format
+                        questions = []
+                        
+                        # Add dummy_question as the first question if it exists
+                        if "dummy_question" in desc_json:
+                            questions.append({
+                                "q": desc_json["dummy_question"]["q"],
+                                "a": desc_json["dummy_question"]["a"],
                                 "textAnswers": [],
                                 "mcqAnswers": []
-                            } for q in desc_json["questions"]
-                        ],
-                        "keywords": desc_json["keywords"],
-                        "map_placement": desc_json["map_placement"],
-                        "summary": desc_json["summary"]
-                    }
+                            })
+                        
+                        # Add the rest of the questions
+                        if "questions" in desc_json:
+                            for q in desc_json["questions"]:
+                                questions.append({
+                                    "q": q["q"],
+                                    "a": q["a"],
+                                    "textAnswers": [],
+                                    "mcqAnswers": []
+                                })
+                        
+                        prelabel = {
+                            "questions": questions,
+                            "keywords": desc_json.get("keywords", []),
+                            "map_placement": desc_json.get("map_placement", {}).get("value", "") if isinstance(desc_json.get("map_placement", {}), dict) else desc_json.get("map_placement", ""),
+                            "summary": desc_json.get("summary", "")
+                        }
+                    else:
+                        # For non-ADS projects, use the original format
+                        prelabel = {
+                            "questions": [
+                                {
+                                    "q": q["q"],
+                                    "a": q["a"],
+                                    "textAnswers": [],
+                                    "mcqAnswers": []
+                                } for q in desc_json["questions"]
+                            ],
+                            "keywords": desc_json["keywords"],
+                            "map_placement": desc_json["map_placement"],
+                            "summary": desc_json["summary"]
+                        }
+
+
+
                     # Update the datapoint's preLabel field and status
                     datapoints_collection.update_one(
                         {"_id": datapoint["_id"]},

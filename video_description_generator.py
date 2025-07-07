@@ -139,14 +139,6 @@ class VideoDescriptionGenerator:
     def generate_description(self, keyframes, custom_prompt=None):
         """Generate a description for a set of keyframes using the gpt-4o-mini API."""
         try:
-            # Use custom prompt if provided, otherwise use default
-            if custom_prompt:
-                print(f"Using custom prompt")
-                prompt_to_use = custom_prompt
-            else:
-                print(f"Using default prompt")
-                prompt_to_use = VIDEO_ANALYSIS_PROMPT
-            
             # Convert keyframes to base64
             image_contents = []
             for i, keyframe in enumerate(keyframes):
@@ -169,7 +161,7 @@ class VideoDescriptionGenerator:
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": prompt_to_use}
+                                {"type": "text", "text": custom_prompt}
                             ] + image_contents
                         }
                     ]
@@ -198,6 +190,7 @@ class VideoDescriptionGenerator:
                 continue
             print(f"Extracted {len(keyframes)} keyframes from {video_path}")
             description = self.generate_description(keyframes, custom_prompt)
+            print(f"Generated description for {video_path}: {description}")
             if description:
                 results[video_path] = description
                 print(f"Successfully generated description for {video_path}")
