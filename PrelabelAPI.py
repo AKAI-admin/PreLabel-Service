@@ -1,3 +1,4 @@
+#checking ci/cd
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Body, Query
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -7,6 +8,8 @@ import json
 import yaml
 import requests
 import time
+import logging
+import sys
 from dotenv import load_dotenv
 from video_description_generator import VideoDescriptionGenerator
 from video_analysis_prompt import VIDEO_ANALYSIS_PROMPT
@@ -15,6 +18,17 @@ from datetime import datetime , timedelta
 import numpy as np
 from sewar.full_ref import mse, psnr, ssim
 from video_analysis_prompt_ads import VIDEO_ANALYSIS_PROMPT_ADS
+
+# Configure logging to ensure output goes to stdout/stderr for systemd
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv('config.env')
@@ -265,19 +279,19 @@ def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
 
 def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_project=False):
     """Process datapoints and update their preLabel field in the database."""
-    print(f"Starting to process {len(datapoints)} datapoints")
-    print(f"🏷️ Project type: {'ADS' if is_ads_project else 'NON-ADS'}")
+    logger.info(f"Starting to process {len(datapoints)} datapoints")
+    logger.info(f"🏷️ Project type: {'ADS' if is_ads_project else 'NON-ADS'}")
     
     for i, datapoint in enumerate(datapoints):
         video_path = datapoint["mediaUrl"]
         try:
 
             # Process video and get description using custom prompt if available
-            print(f"Processing video {i+1}/{len(datapoints)}: {video_path}")
+            logger.info(f"Processing video {i+1}/{len(datapoints)}: {video_path}")
             results = generator.process_videos([video_path], custom_prompt)
             description = results.get(video_path)
             if description:
-                print(f"Description received")
+                logger.info(f"Description received for video: {video_path}")
 
                 try:
                     # Parse the JSON description
@@ -340,7 +354,7 @@ def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_proj
                             }
                         }
                     )
-                    print(f"✅ Successfully saved preLabel data to MongoDB for project_id: {datapoint['project_id']}")
+                    logger.info(f"✅ Successfully saved preLabel data to MongoDB for project_id: {datapoint['project_id']}")
                     update_pre_label_list(user_id,datapoint["project_id"])
                     
                     # Clean up temporary video file
