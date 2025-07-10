@@ -31,8 +31,8 @@ Additional requirements:
 - Generate relevant keywords describing the main elements and themes
 - Create a detailed description of the video in as many words as possible that includes all aspects of the video
 - Determine map placement from these options: Town, Village, Water body, Mountains, Snow, Road
-- Additionally, generate one dummy question-answer pair that is a straightforward observation from the keyframes. This dummy question should be distinct from the 5 relevant questions and focus on a basic, easily verifiable aspect of the video, such as identifying a prominent color, object, or action that is clearly visible. The answer should be a short phrase or a single word. Include this in the JSON output under the key 'dummy_question' with 'q' and 'a' subkeys.
-
+- Generate one dummy question-answer pair that is a straightforward observation from the keyframes. This dummy question should be distinct from the 5 relevant questions and focus on a basic, easily verifiable aspect of the video, such as identifying a prominent color, object, or action that is clearly visible. The answer should be a short phrase or a single word. Include this in the JSON output under the key 'dummy_question' with 'q' and 'a' subkeys.
+- The Generated Dummy queestion-Answer pair such that the answer is deliberately incorrect for the question.
 Example:
 For these keyframes:
 - Frame 1: People sitting in a classroom setting
