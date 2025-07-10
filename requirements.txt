@@ -2,6 +2,7 @@ fastapi
 uvicorn
 pydantic
 pymongo
+pyyaml
 opencv-python-headless
 numpy
 requests
