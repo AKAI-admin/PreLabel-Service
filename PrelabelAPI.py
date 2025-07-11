@@ -178,16 +178,11 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     custom_prompt = None
     is_ads_project = False
     try:
-        print(f"🔍 Looking for project_id: {project_id}")
-        # Find user document where one of the projects has _id == project_id
         user = users_collection.find_one({"projects._id": project_id})
-        print(f"🔍 Found user: {user is not None}")
 
         if user and "projects" in user:
-            print(f"🔍 User has {len(user['projects'])} projects")
             for project in user["projects"]:
                 if project.get("_id") == project_id:
-                    print(f"🔍 Found matching project with labeledBy: {project.get('labeledBy')}")
 
                     # Check if labeledBy is ads or not
                     if project.get("labeledBy") == "ads":
@@ -229,7 +224,7 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
     )
 
     # Schedule processing in the background
-    background_tasks.add_task(process_datapoints, datapoints, custom_prompt, user_id=user_id, is_ads_project=is_ads_project)
+    background_tasks.add_task(process_datapoints, datapoints, custom_prompt, user_id=user_id, is_ads_project=is_ads_project, task_id=task_id, project_id=project_id)
     return {"message": "Prelabeling started in the background"}
 
 def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
@@ -277,7 +272,27 @@ def update_pre_label_list(user_id: ObjectId, project_id: ObjectId):
     except Exception as e:
         print("Error in update_pre_label_list:", str(e))
 
-def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_project=False):
+def update_task_status_to_live_label(task_id: ObjectId, user_id: ObjectId, project_id: ObjectId):
+    """Update processing status from pre-label to live-label for the task within the user's project"""
+    try:
+        result = users_collection.update_one(
+            {"_id": user_id, "projects._id": project_id, "projects.tasks._id": task_id},
+            {"$set": {"projects.$[project].tasks.$[task].processingStatus": "live-label"}}, 
+            array_filters=[{"project._id": project_id}, {"task._id": task_id}]
+        )
+
+        if result.modified_count > 0:
+            logger.info(f"✅ Updated task processingStatus to live-label for task_id: {task_id}")
+            return 1
+        else:
+            logger.warning(f"⚠️ Task not found or already updated: task_id {task_id}, project_id {project_id}")
+            return 0
+
+    except Exception as e:
+        logger.error(f"❌ Error updating task status to live-label: {str(e)}")
+        return 0
+
+def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_project=False, task_id=None, project_id=None):
     """Process datapoints and update their preLabel field in the database."""
     logger.info(f"Starting to process {len(datapoints)} datapoints")
     logger.info(f"🏷️ Project type: {'ADS' if is_ads_project else 'NON-ADS'}")
@@ -366,8 +381,8 @@ def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_proj
                             print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
                     
                     # Add cooling time after successful processing to prevent CPU overheating
-                    print(f"💤 Cooling down CPU for 10 seconds...")
-                    time.sleep(10)
+                    print(f"💤 Cooling down CPU for 3 seconds...")
+                    time.sleep(3)
                     
                 except json.JSONDecodeError as e:
                     print(f"JSON Decode Error for {video_path}: {e}")
@@ -418,14 +433,20 @@ def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_proj
             datapoints_collection.update_one(
                 {"_id": datapoint["_id"]},
                 {"$set": {"processingStatus": "created"}}
-            )
-            # Clean up video_path if it was assigned before the error
+            )            # Clean up video_path if it was assigned before the error
             if 'video_path' in locals() and video_path and os.path.exists(video_path):
                 try:
                     os.remove(video_path)
                     print(f"🧹 Cleaned up temporary video file: {video_path}")
                 except Exception as cleanup_error:
                     print(f"Warning: Could not clean up temporary file {video_path}: {cleanup_error}")
+
+    # After processing all datapoints, update task status from pre-label to live-label
+    if task_id and user_id and project_id:
+        logger.info(f"🔄 All datapoints processed. Updating task status to live-label for task_id: {task_id}")
+        updated_count = update_task_status_to_live_label(task_id, user_id, project_id)
+        logger.info(f"✅ Task processing completed. Updated task status to live-label. Modified count: {updated_count}")
+
 
 if __name__ == "__main__":
     import uvicorn
