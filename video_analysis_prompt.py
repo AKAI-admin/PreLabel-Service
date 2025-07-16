@@ -50,17 +50,17 @@ Please provide output in exactly this format do not deviate from this json forma
 
 {
     "questions": [
-        {"q": "What is the setting and time of day for this educational activity?", "a": "An indoor classroom during daytime hours with natural lighting"},
-        {"q": "How many participants are present and what are their roles in this learning environment?", "a": "One teacher and approximately 20 students engaged in a lecture format"},
-        {"q": "What objects and equipment are visible in the classroom and how are they being used?", "a": "A whiteboard for instruction, desks and chairs arranged in rows, and a projector for visual aids"},
-        {"q": "What is the camera perspective and how does it capture the classroom dynamics?", "a": "Static camera positioned at the front of the class, providing a clear view of both teacher and student interactions"},
-        {"q": "What teaching methods and student interactions are visible in this educational setting?", "a": "Teacher-led instruction using board work, followed by student group discussions in a collaborative learning environment"}
+        {"q": "...?", "a": "..."},
+        {"q": "...?", "a": "..."},
+        {"q": "...?", "a": "..."},
+        {"q": "...?", "a": "..."},
+        {"q": "...?", "a": "..."}
     ],
-    "keywords": ["education", "classroom", "teaching", "students", "group work", "learning"],
+    "keywords": ["..", "..", "..", "..", "..", ".."],
     "map_placement": {
-        "value": "Town"
+        "value": "..."
     },
-    "summary": "The video depicts a daytime classroom scene with a teacher instructing approximately 20 students, followed by students engaging in group discussions. The classroom is equipped with desks, chairs, a whiteboard, and a projector. The lighting is well-lit with natural light, and the camera is static from the front of the class."
+    "summary": "..."
 }
 
 Please analyze the provided all keyframes and provide only one output combining all information in the same JSON structure
