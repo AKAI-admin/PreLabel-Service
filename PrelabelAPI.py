@@ -82,7 +82,7 @@ async def process_instructions(
         # Use instructions directly instead of parsing JSON
         prompt = f"""You are an AI assistant tasked with modifying a default prompt for analyzing video keyframes based on a user-provided paragraph that contains details about the dataset, special labeling instructions, and objects to focus on. Your goal is to update the default aspects list and example questions to align with the specific requirements of the dataset, ensuring high-quality labeling output.
 Here is the default prompt you will modify:
-kindly make sure to keep the same format as the default prompt given in string not any type of json: {base_prompt}
+kindly make sure to keep the same format as the default prompt given in string not any type of json dont keep it incomplete please as is it from start to end with all question answer format is shown : {base_prompt}
 
 Instructions for Modification:
 When you receive the user's paragraph, follow these steps:
