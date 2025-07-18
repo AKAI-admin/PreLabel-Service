@@ -21,7 +21,7 @@ class VideoDescriptionGenerator:
             max_frames: Maximum number of frames to process (prevents memory overflow on long 4K videos)
         """
         # TransNetV2 input resolution - very small for 4K compression
-        target_width, target_height = 96, 54
+        target_width, target_height = 48, 27
 
         try:
             # Open video stream directly with OpenCV (works with URLs)
