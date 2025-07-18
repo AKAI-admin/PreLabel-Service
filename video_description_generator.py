@@ -11,18 +11,17 @@ class VideoDescriptionGenerator:
         self.transnet_model = TransNetV2(model_dir=transnet_model_dir)
         self.gpt_api_key = gpt_api_key
 
-    def extract_keyframes(self, video_path, compression_quality=30, frame_skip=2, max_frames=1000):
-        """Extract keyframes from a video path using OpenCV VideoCapture with aggressive compression for 4K videos.
+    def extract_keyframes(self, video_path, compression_quality=30, frame_skip=1, max_frames=1500):
+        """Extract keyframes from a video path using OpenCV VideoCapture with improved frame selection and compression for better GPT analysis.
         
         Args:
             video_path: URL or local path to video
             compression_quality: JPEG compression quality (1-100, lower = more compression) - default 30 for 4K
-            frame_skip: Skip every N frames for temporal compression (2 = process every 3rd frame)
+            frame_skip: Skip every N frames for temporal compression (1 = process every 2nd frame)
             max_frames: Maximum number of frames to process (prevents memory overflow on long 4K videos)
         """
-        
         # TransNetV2 input resolution - very small for 4K compression
-        target_width, target_height = 48, 27
+        target_width, target_height = 96, 54
 
         try:
             # Open video stream directly with OpenCV (works with URLs)
@@ -52,15 +51,15 @@ class VideoDescriptionGenerator:
                 print("4K video detected - applying aggressive quality compression")
                 # For 4K: keep all frames but use very low quality
                 actual_frame_skip = frame_skip  # No forced frame skipping
-                actual_quality = min(compression_quality, 15)  # Very low quality for 4K
+                actual_quality = min(compression_quality, 20)  # Slightly higher quality for better analysis
             elif is_hd:
                 print("HD video detected - applying moderate quality compression")
                 actual_frame_skip = frame_skip  # No forced frame skipping
-                actual_quality = min(compression_quality, 25)  # Low quality for HD
+                actual_quality = min(compression_quality, 28)  # Low quality for HD
             else:
                 print("Standard resolution - using normal compression")
                 actual_frame_skip = frame_skip
-                actual_quality = compression_quality
+                actual_quality = max(compression_quality, 35)  # Ensure reasonable quality for lower res
 
             frames = []
             frame_count = 0
