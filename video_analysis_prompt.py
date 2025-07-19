@@ -35,6 +35,7 @@ Additional requirements:
 - Generate relevant keywords describing the main elements and themes
 - Create a detailed description of the video in as many words as possible that includes all aspects of the video
 - Determine map placement from these options: Town, Village, Water body, Mountains, Snow, Road
+- Use all images for creating question-answer pairs; do not favor any single image disproportionately
 
 Example:
 For these keyframes:
