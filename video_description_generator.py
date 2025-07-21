@@ -12,13 +12,16 @@ class VideoDescriptionGenerator:
         self.gpt_api_key = gpt_api_key
 
     def extract_keyframes(self, video_path, compression_quality=30, frame_skip=1, max_frames=1500):
-        """Extract keyframes from a video path using OpenCV VideoCapture with improved frame selection and compression for better GPT analysis.
+        """Extract keyframe indices from a video path using compressed frames for scene detection only.
         
         Args:
             video_path: URL or local path to video
             compression_quality: JPEG compression quality (1-100, lower = more compression) - default 30 for 4K
             frame_skip: Skip every N frames for temporal compression (1 = process every 2nd frame)
             max_frames: Maximum number of frames to process (prevents memory overflow on long 4K videos)
+            
+        Returns:
+            list: keyframe_indices - original frame positions of detected keyframes
         """
         # TransNetV2 input resolution - very small for 4K compression
         target_width, target_height = 48, 27
@@ -62,6 +65,7 @@ class VideoDescriptionGenerator:
                 actual_quality = max(compression_quality, 35)  # Ensure reasonable quality for lower res
 
             frames = []
+            frame_indices = []  # Track actual frame indices for high-quality extraction
             frame_count = 0
             processed_count = 0
             
@@ -102,6 +106,7 @@ class VideoDescriptionGenerator:
                 compressed_frame = cv2.imdecode(encoded_frame, cv2.IMREAD_COLOR)
                 
                 frames.append(compressed_frame)
+                frame_indices.append(frame_count - 1)  # Store the actual frame index (0-based)
                 processed_count += 1
                 
                 # Progress reporting
@@ -127,9 +132,11 @@ class VideoDescriptionGenerator:
             _, scene_predictions = self.transnet_model.predict_frames(resized_frames)
             scenes = self.transnet_model.predictions_to_scenes(scene_predictions)
 
-            key_frames = [frames[scene_start] for scene_start, _ in scenes]
-            print("✅ Keyframes extracted successfully")
-            return key_frames
+            # Get keyframe indices only
+            keyframe_indices = [frame_indices[scene_start] for scene_start, _ in scenes]
+            
+            print(f"✅ Keyframes extracted successfully: {len(keyframe_indices)} keyframes at indices {keyframe_indices}")
+            return keyframe_indices
 
         except Exception as e:
             print(f"❌ Error extracting keyframes from stream: {e}")
@@ -183,12 +190,23 @@ class VideoDescriptionGenerator:
         results = {}
         for video_path in video_paths:
             print(f"Processing video: {video_path}")
-            keyframes = self.extract_keyframes(video_path, compression_quality, frame_skip)
-            if keyframes is None:
+            
+            # Extract keyframe indices using compressed frames for scene detection
+            keyframe_indices = self.extract_keyframes(video_path, compression_quality, frame_skip)
+            if keyframe_indices is None:
                 print(f"Failed to extract keyframes from {video_path}")
                 continue
-            print(f"Extracted {len(keyframes)} keyframes from {video_path}")
-            description = self.generate_description(keyframes, custom_prompt)
+            
+            print(f"Detected {len(keyframe_indices)} keyframe indices from {video_path}")
+            
+            # Get high-quality keyframes at the identified indices
+            high_quality_keyframes = self.get_high_quality_keyframes(video_path, keyframe_indices)
+            if high_quality_keyframes is None:
+                print(f"Failed to extract high-quality keyframes from {video_path}")
+                continue
+            
+            # Use high-quality keyframes for description generation
+            description = self.generate_description(high_quality_keyframes, custom_prompt)
             print(f"Generated description for {video_path}: {description}")
             if description:
                 results[video_path] = description
@@ -196,3 +214,65 @@ class VideoDescriptionGenerator:
             else:
                 print(f"Failed to generate description for {video_path}")
         return results
+
+    def get_high_quality_keyframes(self, video_path, keyframe_indices, quality=95):
+        """Extract high-quality keyframes at specific frame indices without loading the entire video.
+        
+        Args:
+            video_path: URL or local path to video
+            keyframe_indices: List of frame indices to extract
+            quality: JPEG quality for encoding (1-100, higher = better quality)
+            
+        Returns:
+            list: High-quality keyframe images
+        """
+        try:
+            cap = cv2.VideoCapture(video_path)
+            
+            if not cap.isOpened():
+                print(f"❌ Could not open video stream for high-quality extraction: {video_path}")
+                return None
+            
+            # Get video properties
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            
+            print(f"Extracting {len(keyframe_indices)} high-quality keyframes from {width}x{height} video")
+            
+            high_quality_frames = []
+            
+            # Sort indices to minimize seeking
+            sorted_indices = sorted(keyframe_indices)
+            
+            for i, frame_idx in enumerate(sorted_indices):
+                # Validate frame index
+                if frame_idx >= total_frames:
+                    print(f"⚠️ Frame index {frame_idx} exceeds video length ({total_frames}), skipping")
+                    continue
+                
+                # Seek to specific frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                
+                if not ret:
+                    print(f"⚠️ Failed to read frame at index {frame_idx}")
+                    continue
+                
+                # Use high-quality JPEG encoding
+                jpeg_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
+                _, encoded_frame = cv2.imencode('.jpg', frame, jpeg_params)
+                high_quality_frame = cv2.imdecode(encoded_frame, cv2.IMREAD_COLOR)
+                
+                high_quality_frames.append(high_quality_frame)
+                print(f"✅ Extracted high-quality frame {i+1}/{len(sorted_indices)} at index {frame_idx}")
+            
+            cap.release()
+            
+            print(f"✅ Successfully extracted {len(high_quality_frames)} high-quality keyframes")
+            return high_quality_frames
+            
+        except Exception as e:
+            print(f"❌ Error extracting high-quality keyframes: {e}")
+            return None
