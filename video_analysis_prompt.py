@@ -32,6 +32,7 @@ For all of these aspect:
 - Can club at max 2 aspects together in a single question
 - Flag any uncertain information
 - Make use of word "scene" instead of "keyframes" in the output
+- Donot repeat the same aspect if they are covered either in question or answer
 
 Additional requirements:
 - Generate relevant keywords describing the main elements and themes
