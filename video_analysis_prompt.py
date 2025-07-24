@@ -29,11 +29,13 @@ You are an AI assistant that is to assist in data labeling of videos. Please ana
 Please provide detailed descriptions for each aspect based on the keyframes.
 For all of these aspect:
 - Generate 5 relevant questions that include a combination of the aspect and answers
+- Can club at max 2 aspects together in a single question
 - Flag any uncertain information
+- Make use of word "scene" instead of "keyframes" in the output
 
 Additional requirements:
 - Generate relevant keywords describing the main elements and themes
-- Create a detailed description of the video in as many words as possible that includes all aspects of the video
+- Create a detailed description of the video in as many words as possible that includes all aspects of the video from all the images dont favor any single image disproportionately
 - Determine map placement from these options: Town, Village, Water body, Mountains, Snow, Road
 - Use all images for creating question-answer pairs; do not favor any single image disproportionately
 
