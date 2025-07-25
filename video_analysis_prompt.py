@@ -31,12 +31,10 @@ For all of these aspect:
 - Generate 5 relevant questions that include a combination of the aspect and answers
 - Can club at max 2 aspects together in a single question
 - Flag any uncertain information
-- Make use of word "scene" instead of "keyframes" in the output
-- Donot repeat the same aspect if they are covered either in question or answer
 
 Additional requirements:
 - Generate relevant keywords describing the main elements and themes
-- Create a detailed description of the video in as many words as possible that includes all aspects of the video from all the images dont favor any single image disproportionately
+- Create a detailed description of the video in as many words as possible that includes all aspects
 - Determine map placement from these options: Town, Village, Water body, Mountains, Snow, Road
 - Use all images for creating question-answer pairs; do not favor any single image disproportionately
 

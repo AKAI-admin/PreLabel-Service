@@ -25,9 +25,7 @@ Please provide detailed descriptions for each aspect based on the keyframes.
 
 For all of these aspects:
 - Generate 5 relevant questions that include a combination of the aspect and answers
-- Can club at max 2 aspects together in a single question
 - Flag any uncertain information
-- Make use of word "scene" instead of "keyframes" in the output
 
 Additional requirements:
 - Generate relevant keywords describing the main elements and themes
@@ -35,7 +33,6 @@ Additional requirements:
 - Determine map placement from these options: Town, Village, Water body, Mountains, Snow, Road
 - Generate one dummy question-answer pair that is a straightforward observation from the keyframes. This dummy question should be distinct from the 5 relevant questions and focus on a basic, easily verifiable aspect of the video, such as identifying a prominent color, object, or action that is clearly visible. The answer should be a short phrase or a single word. Include this in the JSON output under the key 'dummy_question' with 'q' and 'a' subkeys.
 - The Generated Dummy queestion-Answer pair such that the answer is deliberately incorrect for the question.
-- Donot repeat the same aspect if they are covered either in question or answer
 Example:
 For these keyframes:
 - Frame 1: People sitting in a classroom setting
