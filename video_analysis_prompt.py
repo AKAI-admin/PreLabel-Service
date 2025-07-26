@@ -4,7 +4,7 @@ This prompt is used to analyze video keyframes and generate structured data for 
 """
 
 VIDEO_ANALYSIS_PROMPT = """
-You are an AI assistant that is to assist in data labeling of videos. Please analyze these video keyframes and identify the following aspects:
+You are an AI assistant that is to assist in getting text description of videos. Please analyze these video keyframes and identify the following aspects:
 1. Location (Where?)
 2. Number of participants (Who?)
 3. Event description (What?)
