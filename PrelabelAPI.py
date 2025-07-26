@@ -125,7 +125,7 @@ Paragraph Input: {instructions}
                 "Content-Type": "application/json"
             },
             json={
-                "model": "gpt-4o-mini",
+                "model": "o4-mini",
                 "messages": [
                     {
                         "role": "user",
