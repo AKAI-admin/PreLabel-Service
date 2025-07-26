@@ -132,8 +132,8 @@ Paragraph Input: {instructions}
                         "content": prompt
                     }
                 ],
-                "max_completion_tokens": 1000,
-                "temperature": 1
+                # "max_tokens": 1000,
+                # "temperature": 1
             }
         )
         
@@ -141,6 +141,7 @@ Paragraph Input: {instructions}
             openai_response = response.json()['choices'][0]['message']['content']
             # Replace escaped newlines with actual newlines for clean formatting
             clean_response = openai_response.replace('\\n', '\n')
+            print("OpenAI Prompt:\n", clean_response)
             return PlainTextResponse(content=clean_response)
         else:
             print(f"OpenAI API error: {response.status_code} - {response.text}")
