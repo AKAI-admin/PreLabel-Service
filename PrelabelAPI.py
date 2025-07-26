@@ -126,15 +126,15 @@ Paragraph Input: {instructions}
                 "Content-Type": "application/json"
             },
             json={
-                "model": "o4-mini",
+                "model": "gpt-4o",
                 "messages": [
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                # "max_tokens": 1000,
-                # "temperature": 1
+                "max_tokens": 1000,
+                "temperature": 0.7
             }
         )
         
