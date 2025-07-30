@@ -43,7 +43,7 @@ class VideoDescriptionGenerator:
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            print(f"Streaming video from: {video_path}")
+            # print(f"Streaming video from: {video_path}")
             print(f"Video info: {total_frames} frames at {fps:.2f} FPS, Resolution: {width}x{height}")
             
             # Calculate compression settings - focus on quality reduction, not frame skipping
@@ -112,7 +112,7 @@ class VideoDescriptionGenerator:
                 # Progress reporting
                 if processed_count % 50 == 0:
                     compression_ratio = (frame_count / processed_count) if processed_count > 0 else 1
-                    print(f"Processed {processed_count} frames (compression ratio: {compression_ratio:.1f}x)")
+                    # print(f"Processed {processed_count} frames (compression ratio: {compression_ratio:.1f}x)")
                 
                 # Memory management for 4K videos - more frequent since keeping all frames
                 if is_4k and processed_count % 100 == 0:
@@ -125,7 +125,7 @@ class VideoDescriptionGenerator:
                 print(f"⚠️ No frames extracted from: {video_path}")
                 return None
 
-            print(f"✅ Extracted {len(frames)} frames from stream")
+            print(f"Extracted {len(frames)} frames from stream")
 
             # Predict scene changes
             resized_frames = np.array(frames, dtype=np.uint8)
@@ -135,7 +135,7 @@ class VideoDescriptionGenerator:
             # Get keyframe indices only
             keyframe_indices = [frame_indices[scene_start] for scene_start, _ in scenes]
             
-            print(f"✅ Keyframes extracted successfully: {len(keyframe_indices)} keyframes at indices {keyframe_indices}")
+            print(f"Keyframes extracted successfully: {len(keyframe_indices)} keyframes at indices {keyframe_indices}")
             return keyframe_indices
 
         except Exception as e:
@@ -153,7 +153,7 @@ class VideoDescriptionGenerator:
                 image_contents.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}})
                 print(f"Encoded keyframe {i+1}/{len(keyframes)}")
 
-            print("Making API request to OpenAI...")
+            # print("Making API request to OpenAI...")
             # Construct the API request
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -173,7 +173,7 @@ class VideoDescriptionGenerator:
                     ]
                 }
             )
-            print(f"API response status: {response.status_code}")
+            # print(f"API response status: {response.status_code}")
             if response.status_code == 200:
                 result = response.json()['choices'][0]['message']['content']
                 print(f"Successfully got response from OpenAI")
@@ -197,7 +197,7 @@ class VideoDescriptionGenerator:
                 print(f"Failed to extract keyframes from {video_path}")
                 continue
             
-            print(f"Detected {len(keyframe_indices)} keyframe indices from {video_path}")
+            # print(f"Detected {len(keyframe_indices)} keyframe indices from {video_path}")
             
             # Get high-quality keyframes at the identified indices
             high_quality_keyframes = self.get_high_quality_keyframes(video_path, keyframe_indices)
@@ -207,10 +207,10 @@ class VideoDescriptionGenerator:
             
             # Use high-quality keyframes for description generation
             description = self.generate_description(high_quality_keyframes, custom_prompt)
-            print(f"Generated description for {video_path}: {description}")
+            # print(f"Generated description")
             if description:
                 results[video_path] = description
-                print(f"Successfully generated description for {video_path}")
+                # print(f"Successfully generated description")
             else:
                 print(f"Failed to generate description for {video_path}")
         return results

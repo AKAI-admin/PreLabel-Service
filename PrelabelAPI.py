@@ -25,7 +25,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.StreamHandler(sys.stderr)
     ]
 )
 logger = logging.getLogger(__name__)
@@ -188,28 +187,28 @@ async def prelabel_videos(request: PrelabelRequest, background_tasks: Background
                     # Check if labeledBy is ads or not
                     if project.get("labeledBy") == "ads":
                         is_ads_project = True
-                        print("🎯 Labeled by ads")
+                        # print("🎯 Labeled by ads")
                         
                         # Get PreLabelPrompt if it exists inside instruction
                         prelabel_prompt = project.get("instruction", {}).get("preLabelPrompt")
                         print(f"🔍 PreLabelPrompt exists: {prelabel_prompt is not None}")
                         if prelabel_prompt:
                             custom_prompt = prelabel_prompt
-                            print(f"✅ Using custom preLabelPrompt for ads project: {custom_prompt[:200]}...")
+                            print(f"Using custom preLabelPrompt for ads project: {custom_prompt[:200]}...")
                         else:
                             custom_prompt = VIDEO_ANALYSIS_PROMPT_ADS
-                            print("✅ Using ADS default prompt")
+                            print("Using ADS default prompt")
                     else:
                         is_ads_project = False
-                        print(f"🎯 Not ads project (labeledBy: {project.get('labeledBy')})")
+                        # print(f"🎯 Not ads project (labeledBy: {project.get('labeledBy')})")
                         # For non-ads projects, get PreLabelPrompt if it exists
                         prelabel_prompt = project.get("instruction", {}).get("preLabelPrompt")
                         if prelabel_prompt:
                             custom_prompt = prelabel_prompt
-                            print(f"✅ Found custom prompt for non-ads project: {custom_prompt[:200]}...")
+                            print(f"Found custom prompt for non-ads project: {custom_prompt[:200]}...")
                         else:
                             custom_prompt = VIDEO_ANALYSIS_PROMPT
-                            print("✅ Using default VIDEO_ANALYSIS_PROMPT for non-ads project")
+                            print("Using default VIDEO_ANALYSIS_PROMPT for non-ads project")
                     break
         else:
             print("❌ No user found or user has no projects")
@@ -295,7 +294,7 @@ def update_task_status_to_live_label(task_id: ObjectId, user_id: ObjectId, proje
 
 def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_project=False, task_id=None, project_id=None):
     """Process datapoints and update their preLabel field in the database."""
-    logger.info(f"Starting to process {len(datapoints)} datapoints")
+    logger.info(f"🏁Starting to process {len(datapoints)} datapoints")
     logger.info(f"🏷️ Project type: {'ADS' if is_ads_project else 'NON-ADS'}")
     
     for i, datapoint in enumerate(datapoints):
@@ -303,11 +302,11 @@ def process_datapoints(datapoints, custom_prompt=None, user_id=None, is_ads_proj
         try:
 
             # Process video and get description using custom prompt if available
-            logger.info(f"Processing video {i+1}/{len(datapoints)}: {video_path}")
+            # logger.info(f"Processing video {i+1}/{len(datapoints)}: {video_path}")
             results = generator.process_videos([video_path], custom_prompt)
             description = results.get(video_path)
             if description:
-                logger.info(f"Description received for video: {video_path}")
+                logger.info(f"Description received")
 
                 try:
                     # Parse the JSON description
