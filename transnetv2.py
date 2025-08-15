@@ -1,7 +1,9 @@
 import os
 import numpy as np
 import tensorflow as tf
-
+import subprocess
+import json
+import tempfile
 
 class TransNetV2:
     
@@ -71,6 +73,37 @@ class TransNetV2:
         all_frames_pred = np.concatenate([all_ for single_, all_ in predictions])
 
         return single_frame_pred[:len(frames)], all_frames_pred[:len(frames)]  # remove extra padded frames
+    
+    def convert_if_av1(self,video_fn):
+        """Check if the video is AV1, if yes convert to H.264."""
+        # Detect codec
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name",
+            "-of", "json", video_fn
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        info = json.loads(result.stdout)
+        codec_name = info["streams"][0]["codec_name"]
+
+        # Convert if AV1
+        if codec_name.lower() == "av1":
+            print("[Info] AV1 detected — converting to H.264...")
+            tmp_dir = tempfile.gettempdir()
+            converted_path = os.path.join(tmp_dir, "converted_h264.mp4")
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", video_fn,
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:a", "copy", converted_path
+                ],
+                check=True
+            )
+            print(f"[Info] Conversion complete: {converted_path}")
+            return converted_path
+        return video_fn
+
 
     def predict_video(self, video_fn: str):
         try:
@@ -79,6 +112,9 @@ class TransNetV2:
             raise ModuleNotFoundError("For `predict_video` function `ffmpeg` needs to be installed in order to extract "
                                       "individual frames from video file. Install `ffmpeg` command line tool and then "
                                       "install python wrapper by `pip install ffmpeg-python`.")
+
+        # 🔹 Pre-step: ensure H.264 if AV1
+        video_fn = self.convert_if_av1(video_fn)
 
         print("[TransNetV2] Extracting frames from {}".format(video_fn))
         video_stream, err = ffmpeg.input(video_fn).output(
