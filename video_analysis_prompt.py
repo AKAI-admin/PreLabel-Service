@@ -35,7 +35,7 @@ For all of these aspect:
 Additional requirements:
 - Generate relevant keywords describing the main elements and themes
 - Create a detailed description of the video in as many words as possible that includes all aspects
-- Determine "map_placement" strictly from only these options: "Town", "Village", "Water body", "Mountains", "Snow", "Road", "Unknown". Do not generate any other values. Use only one of these exact values.
+- Determine "map_placement" strictly from only these options: "Town", "Village", "Water body", "Mountains", "Snow", "Road". Do not generate any other values. Use only one of these exact values.
 - Use all images for creating question-answer pairs; do not favor any single image disproportionately
 
 Example:

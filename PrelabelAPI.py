@@ -101,7 +101,7 @@ Preserve Output Structure:
 The modified prompt will be used to analyze keyframes and produce a JSON output with the following structure:
 "questions": List of 5 question-answer pairs.
 "keywords": List of relevant keywords.
-"map_placement": Selected option (Town, Village, Water body, Mountains, Snow, Road).
+"map_placement": Selected strictly from options (Town, Village, Water body, Mountains, Snow, Road).
 "summary": Detailed description of the video.
 Output the Modified Prompt:
 Your response should be the full text of the modified prompt, incorporating the updated aspects list and example questions.
